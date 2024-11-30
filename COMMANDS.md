@@ -33,6 +33,8 @@
 
 ## Memory
 
+`cargo solve 1 --dhat`
+
 # Tests
 
 `cargo test`
