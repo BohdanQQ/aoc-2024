@@ -35,7 +35,7 @@ pub fn part_two(input: &str) -> Option<u64> {
     });
     let mut res = 0u64;
     for v in v1.iter() {
-        res += *v as u64 * *right_map.get(&v).unwrap_or(&0u64) as u64;
+        res += *v as u64 * *right_map.get(&v).unwrap_or(&0u64);
     }
     Some(res)
 }
