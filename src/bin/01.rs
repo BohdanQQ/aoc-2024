@@ -4,13 +4,15 @@ advent_of_code::solution!(1);
 
 fn parse(input: &str) -> (Vec<u32>, Vec<u32>) {
     let mut res = (vec![], vec![]);
-    input.trim().split('\n').map(|v| {
-        v.split_ascii_whitespace().collect::<Vec<_>>()
-    })
-    .map(|a| {
-        (a[0].parse().unwrap(), a[1].parse().unwrap())
-    })
-    .for_each(|(o, t)| { res.0.push(o); res.1.push(t); } );
+    input
+        .trim()
+        .split('\n')
+        .map(|v| v.split_ascii_whitespace().collect::<Vec<_>>())
+        .map(|a| (a[0].parse().unwrap(), a[1].parse().unwrap()))
+        .for_each(|(o, t)| {
+            res.0.push(o);
+            res.1.push(t);
+        });
     res
 }
 
@@ -18,7 +20,10 @@ pub fn part_one(input: &str) -> Option<u32> {
     let (mut v1, mut v2) = parse(input);
     v1.sort();
     v2.sort();
-    v1.iter().zip(v2).fold(0, |acc, (one, two)| acc + one.abs_diff(two)).into()
+    v1.iter()
+        .zip(v2)
+        .fold(0, |acc, (one, two)| acc + one.abs_diff(two))
+        .into()
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
