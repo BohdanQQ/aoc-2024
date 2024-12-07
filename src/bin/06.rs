@@ -152,7 +152,7 @@ pub fn part_two(input: &str) -> Option<u32> {
         }
     }
 
-    // 4s to 500ms
+    // 4s to 500ms (debug) (release 55ms)
     let total = Arc::from(atomic::AtomicU32::new(0));
     thread::scope(|c| {
         for i in 0..parsed.len() {
