@@ -59,12 +59,24 @@ pub fn perimeter(area: &HashSet<(usize, usize)>, acc: &mut Vec<(i32, i32)>, fiel
 }
 
 // i hate this but i already spent so much time on this shit lol
+// the 2 fns below are abstractable...
 pub fn scan_x(r_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
-    let mut on_row = area.iter().filter(|(r, c)| *r == r_coord).collect::<Vec<_>>();
+    let mut on_row = area
+        .iter()
+        .filter(|(r, c)| *r == r_coord)
+        .collect::<Vec<_>>();
 
     on_row.sort_by(|a, b| a.1.cmp(&b.1));
-    let on_row_over = on_row.iter().cloned().filter(|(r, c)| (*r == 0 || !area.contains(&(r-1, *c)))).collect::<Vec<_>>();
-    let on_row_below = on_row.iter().cloned().filter(|(r, c)| !area.contains(&(r+1, *c))).collect::<Vec<_>>();
+    let on_row_over = on_row
+        .iter()
+        .cloned()
+        .filter(|(r, c)| (*r == 0 || !area.contains(&(r - 1, *c))))
+        .collect::<Vec<_>>();
+    let on_row_below = on_row
+        .iter()
+        .cloned()
+        .filter(|(r, c)| !area.contains(&(r + 1, *c)))
+        .collect::<Vec<_>>();
     // println!("pre row : {:?}", on_row);
     // println!("row ov: {:?}", on_row_over);
     // println!("row be: {:?}", on_row_below);
@@ -97,11 +109,22 @@ pub fn scan_x(r_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
 }
 
 pub fn scan_y(c_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
-    let mut on_col = area.iter().filter(|(r, c)| *c == c_coord).collect::<Vec<_>>();
+    let mut on_col = area
+        .iter()
+        .filter(|(r, c)| *c == c_coord)
+        .collect::<Vec<_>>();
 
     on_col.sort_by(|a, b| a.0.cmp(&b.0));
-    let on_col_right = on_col.iter().cloned().filter(|(r, c)| !area.contains(&(*r, c + 1))).collect::<Vec<_>>();
-    let on_col_left = on_col.iter().cloned().filter(|(r, c)| (*c == 0 || !area.contains(&(*r, c - 1)))).collect::<Vec<_>>();
+    let on_col_right = on_col
+        .iter()
+        .cloned()
+        .filter(|(r, c)| !area.contains(&(*r, c + 1)))
+        .collect::<Vec<_>>();
+    let on_col_left = on_col
+        .iter()
+        .cloned()
+        .filter(|(r, c)| (*c == 0 || !area.contains(&(*r, c - 1))))
+        .collect::<Vec<_>>();
     // println!("pre col : {:?}", on_col);
     // println!("col left: {:?}", on_col_left);
     // println!("col right: {:?}", on_col_right);
@@ -110,7 +133,7 @@ pub fn scan_y(c_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
         res += 1;
         let mut last = on_col_left[0].0;
         for (r, _) in on_col_left {
-            if *r > last + 1{
+            if *r > last + 1 {
                 res += 1;
             }
             last = *r;
