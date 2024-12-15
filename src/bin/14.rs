@@ -2,39 +2,37 @@ advent_of_code::solution!(14);
 
 type Pair = (i64, i64);
 
+fn clamp_bound(val: i64, upper: i64) -> i64 {
+    match val.cmp(&0) {
+        std::cmp::Ordering::Greater => val % upper,
+        std::cmp::Ordering::Less => val + upper,
+        std::cmp::Ordering::Equal => val,
+    }
+}
+
 fn step_robot(robot_pos: &mut (i64, i64), robot_speed: &(i64, i64), bound_x: i64, bound_y: i64) {
     let (mut new_x, mut new_y) = (robot_pos.0 + robot_speed.0, robot_pos.1 + robot_speed.1);
-    if new_x > 0 {
-        new_x %= bound_x;
-    } else if new_x < 0 {
-        new_x += bound_x;
-    }
-    if new_y > 0 {
-        new_y %= bound_y;
-    } else if new_y < 0 {
-        new_y += bound_y;
-    }
+    new_x = clamp_bound(new_x, bound_x);
+    new_y = clamp_bound(new_y, bound_y);
     robot_pos.0 = new_x;
     robot_pos.1 = new_y;
 }
 
 fn get_quadrant_idx(x: i64, y: i64, x_mid: i64, y_mid: i64) -> usize {
     if x < x_mid && y < y_mid {
-        return 0;
+        0 // the return values dont matter, what matters is that the conditions are correct and return consistently
     } else if x < x_mid {
-        return 1;
+        1
     } else if y < y_mid {
-        return 2;
+        2
     } else {
-        return 3;
+        3
     }
 }
 
 fn get_score(positions: &mut [Pair], bound_x: i64, bound_y: i64) -> usize {
     let mut quadrant_count = [0, 0, 0, 0];
-    //    let x_mid_ignored = bound_x % 2 == 1;
-    let x_mid = (bound_x - 1) / 2;
-    //    let y_mid_ignored = bound_y % 2 == 1;
+    let x_mid = (bound_x - 1) / 2; // asuumes bounds are odd
     let y_mid = (bound_y - 1) / 2;
     for (x, y) in positions {
         if (x_mid == *x) || (y_mid == *y) {
@@ -65,7 +63,17 @@ fn print_robots(robots: &mut [(Pair, Pair)], bound_x: i64, bound_y: i64) {
     }
 }
 
-pub fn part_one(input: &str) -> Option<usize> {
+fn num_pair(input: &str, prefix: &str) -> (i64, i64) {
+    let mut split = input.split(',');
+    (
+        split.next().unwrap()
+            .trim_start_matches(prefix)
+            .parse::<i64>().unwrap(),
+        split.next().unwrap().parse::<i64>().unwrap(),
+    )
+}
+
+pub fn part_iters(input: &str, iters: usize, print: bool) -> usize {
     let mut robots = input
         .split('\n')
         .filter(|l| !l.is_empty())
@@ -73,85 +81,38 @@ pub fn part_one(input: &str) -> Option<usize> {
             let mut split = x.split_ascii_whitespace();
             (split.next().unwrap(), split.next().unwrap())
         })
-        .map(|(pos, sp)| {
-            let mut ps = pos.split(',');
-            let mut ss = sp.split(',');
+        .map(|(pos, sp)|
             (
-                (
-                    ps.next()
-                        .unwrap()
-                        .trim_start_matches("p=")
-                        .parse::<i64>()
-                        .unwrap(),
-                    ps.next().unwrap().parse::<i64>().unwrap(),
-                ),
-                (
-                    ss.next()
-                        .unwrap()
-                        .trim_start_matches("v=")
-                        .parse::<i64>()
-                        .unwrap(),
-                    ss.next().unwrap().parse::<i64>().unwrap(),
-                ),
+                num_pair(pos, "p="),
+                num_pair(sp, "v=")
             )
-        })
+        )
         .collect::<Vec<_>>();
 
     let bound_x = 101; //11;
     let bound_y = 103; //7;
 
-    for _ in 0..100 {
+    for i in 0..iters {
         step_second(&mut robots, bound_x, bound_y);
-        print_robots(&mut robots, bound_x, bound_y);
+        if print {
+            println!("second {} VVVV", i + 1);
+            print_robots(&mut robots, bound_x, bound_y);
+        }
     }
-    Some(get_score(
+    get_score(
         &mut robots.iter().map(|x| x.0).collect::<Vec<_>>(),
         bound_x,
         bound_y,
-    ))
+    )
+}
+
+pub fn part_one(input: &str) -> Option<usize> {
+    Some(part_iters(input, 100, false))
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    let mut robots = input
-        .split('\n')
-        .filter(|l| !l.is_empty())
-        .map(|x| {
-            let mut split = x.split_ascii_whitespace();
-            (split.next().unwrap(), split.next().unwrap())
-        })
-        .map(|(pos, sp)| {
-            let mut ps = pos.split(',');
-            let mut ss = sp.split(',');
-            (
-                (
-                    ps.next()
-                        .unwrap()
-                        .trim_start_matches("p=")
-                        .parse::<i64>()
-                        .unwrap(),
-                    ps.next().unwrap().parse::<i64>().unwrap(),
-                ),
-                (
-                    ss.next()
-                        .unwrap()
-                        .trim_start_matches("v=")
-                        .parse::<i64>()
-                        .unwrap(),
-                    ss.next().unwrap().parse::<i64>().unwrap(),
-                ),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let bound_x = 101; //11;
-    let bound_y = 103; //7;
-
-    for i in 0..10000 * 2 {
-        step_second(&mut robots, bound_x, bound_y);
-        println!("second {} VVVV", i + 1);
-        print_robots(&mut robots, bound_x, bound_y);
-    }
-    // just look (XXXXXX)
+    part_iters(input, 10000 * 2, true);
+    // just look (for XXXXXXXX)
     None
 }
 
