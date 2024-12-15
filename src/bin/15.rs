@@ -53,7 +53,8 @@ fn has_empty_in_dir(
     let mut now_row = from_row as i32 + row_shift;
     let mut now_col = from_col as i32 + col_shift;
     let limit = fld.len() as i32;
-    let out_of_bounds = |x: i32, y: i32| x < 0 || x >= limit || y >= limit || y < 0;
+    let out_of_bounds =
+        |x: i32, y: i32| x < 0 || x >= limit || y >= fld[x as usize].len() as i32 || y < 0;
     // println!("Try shift {row_shift} {col_shift} @ {from_row} {from_col}");
     while !out_of_bounds(now_row, now_col) {
         // println!("{} {}", now_row, now_col);
@@ -105,12 +106,15 @@ fn step(
         Insn::Left => (0, -1),
         Insn::Right => (0, 1),
     };
+    // check if there is space for the very last box in the row
+    // (or just the robot)
     if !has_empty_in_dir(dir_row, dir_col, fld, rob_row, rob_col) {
         return None;
     }
 
     // println!("OK to shift {rob_row} {rob_col} by {dir_row} {dir_col}");
 
+    // perform shifting
     if dir_col == 0 {
         shift_col(fld, (rob_row, rob_col), dir_row);
     } else {
@@ -187,6 +191,69 @@ pub fn part_one(input: &str) -> Option<usize> {
     Some(res)
 }
 
+fn shift_cols_2(fld: &mut [Vec<MapObj>], (from_r, from_c): (usize, usize), shift: i32) -> bool {
+    let nextr = from_r as i32 + shift;
+    if nextr < 0 || nextr as usize >= fld.len() {
+        return false;
+    }
+    let nextr = nextr as usize;
+    let next_obj = fld[nextr][from_c];
+    let moved = match next_obj {
+        MapObj::Robot => panic!("wtf"),
+        MapObj::Empty => true,
+        MapObj::Obstacle => panic!("impossible"),
+        MapObj::Wall => false,
+        MapObj::ObstacleOpen => {
+            shift_cols_2(fld, (nextr, from_c + 1), shift)
+                && shift_cols_2(fld, (nextr, from_c), shift)
+        }
+        MapObj::ObstacleClose => {
+            shift_cols_2(fld, (nextr, from_c - 1), shift)
+                && shift_cols_2(fld, (nextr, from_c), shift)
+        }
+    };
+
+    if moved {
+        fld[nextr][from_c] = fld[from_r][from_c];
+        fld[from_r][from_c] = MapObj::Empty;
+    }
+
+    moved
+}
+
+fn step_2(
+    fld: &mut Vec<Vec<MapObj>>,
+    (rob_row, rob_col): (usize, usize),
+    insn: Insn,
+) -> Option<(usize, usize)> {
+    let (dir_row, dir_col) = match insn {
+        Insn::Down => (1, 0),
+        Insn::Up => (-1, 0),
+        Insn::Left => (0, -1),
+        Insn::Right => (0, 1),
+    };
+
+    if dir_row == 0 {
+        // check if there is space for the very last box in the row
+        // (or just the robot)
+        if !has_empty_in_dir(dir_row, dir_col, fld, rob_row, rob_col) {
+            return None;
+        }
+        shift_row(fld, (rob_row, rob_col), dir_col);
+    } else {
+        let prev = fld.clone();
+        if !shift_cols_2(fld, (rob_row, rob_col), dir_row) {
+            *fld = prev;
+            return None;
+        }
+    }
+
+    Some((
+        (rob_row as i32 + dir_row) as usize,
+        (rob_col as i32 + dir_col) as usize,
+    ))
+}
+
 fn p2_enlarge(map: &[Vec<MapObj>]) -> Vec<Vec<MapObj>> {
     let mut res = Vec::with_capacity(map.len());
     for r in map {
@@ -222,10 +289,10 @@ pub fn part_two(input: &str) -> Option<usize> {
     let instructions = insn_lines.trim().chars().map(Insn::from);
 
     let mut robot_pos = None;
-    let field = lines_map
+    let mut field = lines_map
         .map(|l| l.chars().map(MapObj::from).collect::<Vec<_>>())
         .collect::<Vec<_>>();
-    let field = p2_enlarge(&field);
+    let mut field = p2_enlarge(&field);
 
     for row in 0..field.len() {
         for col in 0..field[row].len() {
@@ -237,12 +304,29 @@ pub fn part_two(input: &str) -> Option<usize> {
             }
         }
     }
-    pf(&field);
+    // pf(&field);
     let (mut r, mut c) = robot_pos.unwrap();
 
-    // damn, i would need to rewrite a lot...
+    for insn in instructions {
+        if let Some((nr, nc)) = step_2(&mut field, (r, c), insn) {
+            // println!("Shifted to {nr} {nc}");
+            r = nr;
+            c = nc;
+        } else {
+            // println!("NOOP");
+        }
+    }
 
-    Some(r * c * instructions.count())
+    // pf(&field);
+    let mut res = 0;
+    for row in 0..field.len() {
+        for col in 0..field[row].len() {
+            if field[row][col] == MapObj::ObstacleOpen {
+                res += row * 100 + col;
+            }
+        }
+    }
+    Some(res)
 }
 
 #[cfg(test)]
@@ -258,6 +342,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(105));
     }
 }
