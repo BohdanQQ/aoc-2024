@@ -2,6 +2,7 @@ use std::mem;
 
 advent_of_code::solution!(15);
 
+#[derive(Clone, Copy)]
 enum Insn {
     Up,
     Down,
@@ -30,6 +31,8 @@ enum MapObj {
     ObstacleOpen,
     ObstacleClose,
 }
+type FieldV = Vec<Vec<MapObj>>;
+type FieldS = [Vec<MapObj>];
 
 impl From<char> for MapObj {
     fn from(value: char) -> Self {
@@ -42,11 +45,12 @@ impl From<char> for MapObj {
         }
     }
 }
-
+// PART 1 SPECIFICS ------------------------------------------------------------
+// looks in 1 direction and searches for 1 free space (allows the shift)
 fn has_empty_in_dir(
     row_shift: i32,
     col_shift: i32,
-    fld: &mut [Vec<MapObj>],
+    fld: &mut FieldS,
     from_row: usize,
     from_col: usize,
 ) -> bool {
@@ -74,7 +78,7 @@ fn has_empty_in_dir(
     false
 }
 
-fn shift_col(fld: &mut [Vec<MapObj>], (rob_row, rob_col): (usize, usize), shift: i32) {
+fn shift_col(fld: &mut FieldS, (rob_row, rob_col): (usize, usize), shift: i32) {
     let mut prev_val = MapObj::Empty;
     let mut next = rob_row as i32;
     while fld[next as usize][rob_col] != MapObj::Empty {
@@ -84,7 +88,7 @@ fn shift_col(fld: &mut [Vec<MapObj>], (rob_row, rob_col): (usize, usize), shift:
     fld[next as usize][rob_col] = prev_val;
 }
 
-fn shift_row(fld: &mut [Vec<MapObj>], (rob_row, rob_col): (usize, usize), shift: i32) {
+fn shift_row(fld: &mut FieldS, (rob_row, rob_col): (usize, usize), shift: i32) {
     let mut prev_val = MapObj::Empty;
     let mut next = rob_col as i32;
     while fld[rob_row][next as usize] != MapObj::Empty {
@@ -96,7 +100,7 @@ fn shift_row(fld: &mut [Vec<MapObj>], (rob_row, rob_col): (usize, usize), shift:
 }
 
 fn step(
-    fld: &mut [Vec<MapObj>],
+    fld: &mut FieldV,
     (rob_row, rob_col): (usize, usize),
     insn: Insn,
 ) -> Option<(usize, usize)> {
@@ -111,9 +115,7 @@ fn step(
     if !has_empty_in_dir(dir_row, dir_col, fld, rob_row, rob_col) {
         return None;
     }
-
     // println!("OK to shift {rob_row} {rob_col} by {dir_row} {dir_col}");
-
     // perform shifting
     if dir_col == 0 {
         shift_col(fld, (rob_row, rob_col), dir_row);
@@ -126,72 +128,78 @@ fn step(
         (rob_col as i32 + dir_col) as usize,
     ))
 }
+// PART 1 SPECIFICS END --------------------------------------------------------
 
-fn pf(fld: &[Vec<MapObj>]) {
-    for r in fld {
-        for c in r {
-            let chr = match c {
-                MapObj::Empty => '.',
-                MapObj::Robot => '@',
-                MapObj::Obstacle => 'O',
-                MapObj::Wall => '#',
-                MapObj::ObstacleOpen => '[',
-                MapObj::ObstacleClose => ']',
-            };
-            print!("{}", chr);
-        }
-        println!();
-    }
-}
-
-pub fn part_one(input: &str) -> Option<usize> {
+fn parser(input: &str) -> (Vec<Vec<MapObj>>, Vec<Insn>) {
     let line_iter = input.split("\n");
     let line_iter2 = line_iter.clone();
     let lines_map = line_iter.take_while(|l| !l.is_empty());
     let n = lines_map.clone().count();
     let insn_lines = line_iter2.skip(n + 1).collect::<String>();
-    let instructions = insn_lines.trim().chars().map(Insn::from);
+    let instructions = insn_lines.trim().chars().map(Insn::from).collect();
 
+    let field = lines_map
+        .map(|l| l.chars().map(MapObj::from).collect())
+        .collect();
+    (field, instructions)
+}
+
+fn part_driver<T>(
+    instructions: &[Insn],
+    field: &mut FieldV,
+    step_fn: &mut T,
+    score_match: MapObj,
+) -> usize
+where
+    T: FnMut(&mut FieldV, (usize, usize), Insn) -> Option<(usize, usize)>,
+{
+    // find the robot
     let mut robot_pos = None;
-    let mut field = lines_map
-        .map(|l| l.chars().map(MapObj::from).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
     for row in 0..field.len() {
-        for col in 0..field.len() {
+        for col in 0..field[row].len() {
             if field[row][col] == MapObj::Robot {
-                if robot_pos.is_some() {
-                    panic!("bug robot search");
-                }
+                assert!(robot_pos.is_none(), "bug: duplicate robot position");
                 robot_pos = Some((row, col));
             }
         }
     }
+    // print_field(&field);
+    // perform steps
     let (mut r, mut c) = robot_pos.unwrap();
-
     for insn in instructions {
-        if let Some((nr, nc)) = step(&mut field, (r, c), insn) {
+        if let Some((nr, nc)) = step_fn(field, (r, c), *insn) {
             // println!("Shifted to {nr} {nc}");
             r = nr;
             c = nc;
         } else {
             // println!("NOOP");
         }
-        // pf(&field);
     }
-
+    // print_field(&field);
+    // calculate score
     let mut res = 0;
     for row in 0..field.len() {
-        for col in 0..field.len() {
-            if field[row][col] == MapObj::Obstacle {
+        for col in 0..field[row].len() {
+            if field[row][col] == score_match {
                 res += row * 100 + col;
             }
         }
     }
 
-    Some(res)
+    res
 }
 
-fn shift_cols_2(fld: &mut [Vec<MapObj>], (from_r, from_c): (usize, usize), shift: i32) -> bool {
+pub fn part_one(input: &str) -> Option<usize> {
+    let (mut field, instructions) = parser(input);
+    Some(part_driver(
+        &instructions,
+        &mut field,
+        &mut step,
+        MapObj::Obstacle,
+    ))
+}
+
+fn shift_cols_2(fld: &mut FieldS, (from_r, from_c): (usize, usize), shift: i32) -> bool {
     let nextr = from_r as i32 + shift;
     if nextr < 0 || nextr as usize >= fld.len() {
         return false;
@@ -199,9 +207,8 @@ fn shift_cols_2(fld: &mut [Vec<MapObj>], (from_r, from_c): (usize, usize), shift
     let nextr = nextr as usize;
     let next_obj = fld[nextr][from_c];
     let moved = match next_obj {
-        MapObj::Robot => panic!("wtf"),
+        MapObj::Robot | MapObj::Obstacle => panic!("wtf {:?}", next_obj),
         MapObj::Empty => true,
-        MapObj::Obstacle => panic!("impossible"),
         MapObj::Wall => false,
         MapObj::ObstacleOpen => {
             shift_cols_2(fld, (nextr, from_c + 1), shift)
@@ -222,7 +229,7 @@ fn shift_cols_2(fld: &mut [Vec<MapObj>], (from_r, from_c): (usize, usize), shift
 }
 
 fn step_2(
-    fld: &mut Vec<Vec<MapObj>>,
+    fld: &mut FieldV,
     (rob_row, rob_col): (usize, usize),
     insn: Insn,
 ) -> Option<(usize, usize)> {
@@ -241,20 +248,20 @@ fn step_2(
         }
         shift_row(fld, (rob_row, rob_col), dir_col);
     } else {
-        let prev = fld.clone();
+        let prev = fld.clone(); // oof but makes my life easier
         if !shift_cols_2(fld, (rob_row, rob_col), dir_row) {
             *fld = prev;
             return None;
         }
     }
-
     Some((
         (rob_row as i32 + dir_row) as usize,
         (rob_col as i32 + dir_col) as usize,
     ))
 }
 
-fn p2_enlarge(map: &[Vec<MapObj>]) -> Vec<Vec<MapObj>> {
+// part 1 input -> part 2 input
+fn p2_enlarge(map: &FieldS) -> FieldV {
     let mut res = Vec::with_capacity(map.len());
     for r in map {
         let mut nr = Vec::with_capacity(map.len() * 2);
@@ -281,52 +288,32 @@ fn p2_enlarge(map: &[Vec<MapObj>]) -> Vec<Vec<MapObj>> {
 }
 
 pub fn part_two(input: &str) -> Option<usize> {
-    let line_iter = input.split("\n");
-    let line_iter2 = line_iter.clone();
-    let lines_map = line_iter.take_while(|l| !l.is_empty());
-    let n = lines_map.clone().count();
-    let insn_lines = line_iter2.skip(n + 1).collect::<String>();
-    let instructions = insn_lines.trim().chars().map(Insn::from);
-
-    let mut robot_pos = None;
-    let mut field = lines_map
-        .map(|l| l.chars().map(MapObj::from).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
+    // part 2 algo had to be changed because the part 1 would get extremely sketchy
+    let (field, instructions) = parser(input);
     let mut field = p2_enlarge(&field);
+    Some(part_driver(
+        &instructions,
+        &mut field,
+        &mut step_2,
+        MapObj::ObstacleOpen,
+    ))
+}
 
-    for row in 0..field.len() {
-        for col in 0..field[row].len() {
-            if field[row][col] == MapObj::Robot {
-                if robot_pos.is_some() {
-                    panic!("bug robot search");
-                }
-                robot_pos = Some((row, col));
-            }
+fn print_field(fld: &FieldS) {
+    for r in fld {
+        for c in r {
+            let chr = match c {
+                MapObj::Empty => '.',
+                MapObj::Robot => '@',
+                MapObj::Obstacle => 'O',
+                MapObj::Wall => '#',
+                MapObj::ObstacleOpen => '[',
+                MapObj::ObstacleClose => ']',
+            };
+            print!("{}", chr);
         }
+        println!();
     }
-    // pf(&field);
-    let (mut r, mut c) = robot_pos.unwrap();
-
-    for insn in instructions {
-        if let Some((nr, nc)) = step_2(&mut field, (r, c), insn) {
-            // println!("Shifted to {nr} {nc}");
-            r = nr;
-            c = nc;
-        } else {
-            // println!("NOOP");
-        }
-    }
-
-    // pf(&field);
-    let mut res = 0;
-    for row in 0..field.len() {
-        for col in 0..field[row].len() {
-            if field[row][col] == MapObj::ObstacleOpen {
-                res += row * 100 + col;
-            }
-        }
-    }
-    Some(res)
 }
 
 #[cfg(test)]
