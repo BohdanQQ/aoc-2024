@@ -1,5 +1,7 @@
 advent_of_code::solution!(13);
 
+
+// ! solves system:
 // ax * A + bx * B = res_x
 // ay * A + by * B = res_y
 pub fn solve_eqation(
@@ -10,12 +12,14 @@ pub fn solve_eqation(
     by: i64,
     res_y: i64,
 ) -> Option<(i64, i64)> {
-    // / ax
+    // ! / ax
     // A  = res_x / ax - bx * B / ax
 
+    // ! subst A from above
     // ay * res_ x / ax - ay * bx * B / ax + by * B = res_y
-    // * ax
+    // ! * ax
     // ay * res_x - ay * bx * B + by * ax * B = res_y * ax
+    // ! extract B
     // B * (by ax - ay bx) = resy ax - resx ay
     // B = (resy ax - resx ay) / (by ax - ay bx)
 
@@ -34,36 +38,30 @@ pub fn solve_eqation(
     }
 }
 
+fn helper_extract(s: &str, delim: char) -> i64 {
+    s.split(delim)
+        .nth(1)
+        .unwrap()
+        .trim_end_matches(',')
+        .parse()
+        .unwrap()
+}
+
 fn get_num(s: &str) -> i64 {
     if s.contains("+") {
-        s.split('+')
-            .nth(1)
-            .unwrap()
-            .trim_end_matches(',')
-            .parse()
-            .unwrap()
+        helper_extract(s, '+')
     } else if s.contains('=') {
-        s.split('=')
-            .nth(1)
-            .unwrap()
-            .trim_end_matches(',')
-            .parse()
-            .unwrap()
+        helper_extract(s, '=')
     } else {
         panic!("invalid {}", s);
     }
 }
 
-pub fn part_one(input: &str) -> Option<i64> {
+fn part_with_shift(input: &str, shift: i64) -> i64 {
     let nums = input
         .split_ascii_whitespace()
         .filter(|s| s.starts_with("X") || s.starts_with("Y"))
         .collect::<Vec<_>>();
-
-    if nums.len() % 6 != 0 {
-        println!("Nums len: {}", nums.len());
-        return None;
-    }
 
     let buttons = nums
         .iter()
@@ -73,12 +71,6 @@ pub fn part_one(input: &str) -> Option<i64> {
         .iter()
         .filter(|s| s.starts_with("X=") || s.starts_with("Y="))
         .collect::<Vec<_>>();
-
-    if prizes.len() % 2 != 0 || buttons.len() != prizes.len() * 2 {
-        println!("Prizes len: {}", prizes.len());
-        println!("Buttons len: {}", buttons.len());
-        return None;
-    }
 
     let mut res = 0;
 
@@ -93,53 +85,21 @@ pub fn part_one(input: &str) -> Option<i64> {
         let (bx, by) = (get_num(sbx), get_num(sby));
         let (res_x, res_y) = (get_num(pr_x), get_num(pr_y));
 
-        if let Some((a_count, b_count)) = solve_eqation(ax, bx, res_x, ay, by, res_y) {
+        if let Some((a_count, b_count)) =
+            solve_eqation(ax, bx, res_x + shift, ay, by, res_y + shift)
+        {
             res += a_count * 3 + b_count;
         }
     }
-    Some(res)
+    res
+}
+
+pub fn part_one(input: &str) -> Option<i64> {
+    Some(part_with_shift(input, 0))
 }
 
 pub fn part_two(input: &str) -> Option<i64> {
-    let nums = input
-        .split_ascii_whitespace()
-        .filter(|s| s.starts_with("X") || s.starts_with("Y"))
-        .collect::<Vec<_>>();
-
-    let buttons = nums
-        .iter()
-        .filter(|s| !s.starts_with("X=") && !s.starts_with("Y="))
-        .collect::<Vec<_>>();
-    let prizes = nums
-        .iter()
-        .filter(|s| s.starts_with("X=") || s.starts_with("Y="))
-        .collect::<Vec<_>>();
-
-    let mut res = 0;
-
-    for prize_idx in 0..(prizes.len() / 2) {
-        let button_a_idx = prize_idx * 4;
-        let button_b_idx = button_a_idx + 2;
-        let (sax, say) = (buttons[button_a_idx], buttons[button_a_idx + 1]);
-        let (sbx, sby) = (buttons[button_b_idx], buttons[button_b_idx + 1]);
-        let (pr_x, pr_y) = (prizes[prize_idx * 2], prizes[prize_idx * 2 + 1]);
-
-        let (ax, ay) = (get_num(sax), get_num(say));
-        let (bx, by) = (get_num(sbx), get_num(sby));
-        let (res_x, res_y) = (get_num(pr_x), get_num(pr_y));
-
-        if let Some((a_count, b_count)) = solve_eqation(
-            ax,
-            bx,
-            res_x + 10000000000000,
-            ay,
-            by,
-            res_y + 10000000000000,
-        ) {
-            res += a_count * 3 + b_count;
-        }
-    }
-    Some(res)
+    Some(part_with_shift(input, 10000000000000))
 }
 
 #[cfg(test)]
