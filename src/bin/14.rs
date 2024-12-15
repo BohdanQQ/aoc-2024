@@ -66,9 +66,12 @@ fn print_robots(robots: &mut [(Pair, Pair)], bound_x: i64, bound_y: i64) {
 fn num_pair(input: &str, prefix: &str) -> (i64, i64) {
     let mut split = input.split(',');
     (
-        split.next().unwrap()
+        split
+            .next()
+            .unwrap()
             .trim_start_matches(prefix)
-            .parse::<i64>().unwrap(),
+            .parse::<i64>()
+            .unwrap(),
         split.next().unwrap().parse::<i64>().unwrap(),
     )
 }
@@ -81,12 +84,7 @@ pub fn part_iters(input: &str, iters: usize, print: bool) -> usize {
             let mut split = x.split_ascii_whitespace();
             (split.next().unwrap(), split.next().unwrap())
         })
-        .map(|(pos, sp)|
-            (
-                num_pair(pos, "p="),
-                num_pair(sp, "v=")
-            )
-        )
+        .map(|(pos, sp)| (num_pair(pos, "p="), num_pair(sp, "v=")))
         .collect::<Vec<_>>();
 
     let bound_x = 101; //11;

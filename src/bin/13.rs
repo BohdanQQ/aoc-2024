@@ -1,6 +1,5 @@
 advent_of_code::solution!(13);
 
-
 // ! solves system:
 // ax * A + bx * B = res_x
 // ay * A + by * B = res_y
