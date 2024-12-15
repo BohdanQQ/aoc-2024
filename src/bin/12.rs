@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet};
 
 use advent_of_code::parse_field;
 
@@ -7,7 +7,7 @@ advent_of_code::solution!(12);
 pub fn dfs_same_chars(
     tgt: char,
     (start_r, start_c): (usize, usize),
-    field: &mut Vec<Vec<(char, bool)>>,
+    field: &mut [Vec<(char, bool)>],
     acc: &mut HashSet<(usize, usize)>,
 ) {
     let r: &mut (char, bool) = &mut field[start_r][start_c];
@@ -35,7 +35,7 @@ pub fn dfs_same_chars(
         dfs_same_chars(tgt, (next_r as usize, next_c as usize), field, acc);
     }
 }
-
+// just try every side of a field in an area - if not in the area -> got a piece of perimeter
 pub fn perimeter(area: &HashSet<(usize, usize)>, acc: &mut Vec<(i32, i32)>, field_limit: usize) {
     let offsets = [(0, 1), (1, 0), (0, -1), (-1, 0)];
 
@@ -58,116 +58,105 @@ pub fn perimeter(area: &HashSet<(usize, usize)>, acc: &mut Vec<(i32, i32)>, fiel
     }
 }
 
-// i hate this but i already spent so much time on this shit lol
-// the 2 fns below are abstractable...
+// 3.5 11.1
+
+fn filter_into_vec<
+    'a,
+    T: Fn(&&(usize, usize)) -> bool,
+    S: Fn(&&(usize, usize), &&(usize, usize)) -> Ordering,
+>(
+    in_seq: &'a [&(usize, usize)],
+    filter_fn: T,
+    sorter: S,
+) -> Vec<&'a (usize, usize)> {
+    let mut rv = in_seq.iter().cloned().filter(filter_fn).collect::<Vec<_>>();
+    rv.sort_by(sorter);
+    rv
+}
+
+// further abstractions over scanx and scany would make them incomprehensible
 pub fn scan_x(r_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
-    let mut on_row = area
+    let on_row = area
         .iter()
-        .filter(|(r, c)| *r == r_coord)
+        .filter(|(r, _)| *r == r_coord)
         .collect::<Vec<_>>();
 
-    on_row.sort_by(|a, b| a.1.cmp(&b.1));
-    let on_row_over = on_row
-        .iter()
-        .cloned()
-        .filter(|(r, c)| (*r == 0 || !area.contains(&(r - 1, *c))))
-        .collect::<Vec<_>>();
-    let on_row_below = on_row
-        .iter()
-        .cloned()
-        .filter(|(r, c)| !area.contains(&(r + 1, *c)))
-        .collect::<Vec<_>>();
-    // println!("pre row : {:?}", on_row);
-    // println!("row ov: {:?}", on_row_over);
-    // println!("row be: {:?}", on_row_below);
-
+    let sorter = |a: &&(usize, usize), b: &&(usize, usize)| a.1.cmp(&b.1);
+    // this trick allows us to count the leftmost and topmost sides (0-th row implies the element MUST be filtered IN)
+    let on_row_over = filter_into_vec(
+        &on_row,
+        |(r, c)| (*r == 0 || !area.contains(&(r - 1, *c))),
+        sorter,
+    );
+    let on_row_below = filter_into_vec(&on_row, |(r, c)| !area.contains(&(r + 1, *c)), sorter);
     let mut res = 0;
-    if !on_row_over.is_empty() {
-        res += 1;
-        let mut last = on_row_over[0].1;
-        for (_, c) in on_row_over {
-            if *c > last + 1 {
-                res += 1;
-                // println!("New start {}", c);
+    let mut add_consecutive = |row: Vec<&(usize, usize)>| {
+        if !row.is_empty() {
+            res += 1;
+            let mut last = row[0].1;
+            for (_, c) in row {
+                if *c > last + 1 {
+                    res += 1;
+                }
+                last = *c;
             }
-            last = *c;
         }
-    }
-
-    if !on_row_below.is_empty() {
-        res += 1;
-        let mut last = on_row_below[0].1;
-        for (_, c) in on_row_below {
-            if *c > last + 1 {
-                res += 1;
-                // println!("New start {}", c);
-            }
-            last = *c;
-        }
-    }
+    };
+    add_consecutive(on_row_over);
+    add_consecutive(on_row_below);
     res
 }
 
 pub fn scan_y(c_coord: usize, area: &HashSet<(usize, usize)>) -> usize {
-    let mut on_col = area
+    let on_col = area
         .iter()
-        .filter(|(r, c)| *c == c_coord)
+        .filter(|(_, c)| *c == c_coord)
         .collect::<Vec<_>>();
-
-    on_col.sort_by(|a, b| a.0.cmp(&b.0));
-    let on_col_right = on_col
-        .iter()
-        .cloned()
-        .filter(|(r, c)| !area.contains(&(*r, c + 1)))
-        .collect::<Vec<_>>();
-    let on_col_left = on_col
-        .iter()
-        .cloned()
-        .filter(|(r, c)| (*c == 0 || !area.contains(&(*r, c - 1))))
-        .collect::<Vec<_>>();
-    // println!("pre col : {:?}", on_col);
-    // println!("col left: {:?}", on_col_left);
-    // println!("col right: {:?}", on_col_right);
+    let sorter = |a: &&(usize, usize), b: &&(usize, usize)| a.0.cmp(&b.0);
+    let on_col_left = filter_into_vec(
+        &on_col,
+        |(r, c)| (*c == 0 || !area.contains(&(*r, c - 1))),
+        sorter,
+    );
+    let on_col_right = filter_into_vec(&on_col, |(r, c)| !area.contains(&(*r, c + 1)), sorter);
     let mut res = 0;
-    if !on_col_left.is_empty() {
-        res += 1;
-        let mut last = on_col_left[0].0;
-        for (r, _) in on_col_left {
-            if *r > last + 1 {
-                res += 1;
+    let mut add_consecutive = |col: Vec<&(usize, usize)>| {
+        if !col.is_empty() {
+            res += 1;
+            let mut last = col[0].0;
+            for (r, _) in col {
+                if *r > last + 1 {
+                    res += 1;
+                }
+                last = *r;
             }
-            last = *r;
         }
-    }
-
-    if !on_col_right.is_empty() {
-        res += 1;
-        let mut last = on_col_right[0].0;
-        for (r, _) in on_col_right {
-            if *r > last + 1 {
-                res += 1;
-            }
-            last = *r;
-        }
-    }
+    };
+    add_consecutive(on_col_left);
+    add_consecutive(on_col_right);
     res
 }
 
-pub fn part_one(input: &str) -> Option<usize> {
-    // explored flag
-    let mut field = parse_field(input, |v, pos| (v, false));
+fn get_areas(field: &mut [Vec<(char, bool)>]) -> Vec<HashSet<(usize, usize)>> {
     let mut areas: Vec<HashSet<(usize, usize)>> = vec![];
-
     for row in 0..field.len() {
         for col in 0..field.len() {
             if field[row][col].1 {
                 continue;
             }
             let mut res = HashSet::new();
-            dfs_same_chars(field[row][col].0, (row, col), &mut field, &mut res);
+            dfs_same_chars(field[row][col].0, (row, col), field, &mut res);
             areas.push(res);
         }
     }
+    areas
+}
+
+pub fn part_one(input: &str) -> Option<usize> {
+    // parsing field for area lookup -> inserts a visited flag next to each character
+    let mut field = parse_field(input, |v, _| (v, false));
+    let areas = get_areas(&mut field);
+
     let mut result = 0;
     let mut perimeters: Vec<Vec<(i32, i32)>> = vec![];
     for area in areas.iter() {
@@ -180,20 +169,9 @@ pub fn part_one(input: &str) -> Option<usize> {
 }
 
 pub fn part_two(input: &str) -> Option<usize> {
-    // explored flag
-    let mut field = parse_field(input, |v, pos| (v, false));
-    let mut areas: Vec<HashSet<(usize, usize)>> = vec![];
+    let mut field = parse_field(input, |v, _| (v, false));
+    let areas = get_areas(&mut field);
 
-    for row in 0..field.len() {
-        for col in 0..field.len() {
-            if field[row][col].1 {
-                continue;
-            }
-            let mut res = HashSet::new();
-            dfs_same_chars(field[row][col].0, (row, col), &mut field, &mut res);
-            areas.push(res);
-        }
-    }
     let mut result = 0;
     for area in areas.iter() {
         let mut sides = 0;
