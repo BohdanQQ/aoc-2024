@@ -164,9 +164,9 @@ impl Machine {
     }
 }
 
-pub fn part_one(input: &str) -> Option<u32> {
+pub fn part_one(input: &str) -> Option<usize> {
     let (reg_a, reg_b, reg_c, instrs, _) = parse_init(input);
-    println!("inputs {} {} {} {:?}", reg_a, reg_b, reg_c, instrs);
+    // println!("inputs {} {} {} {:?}", reg_a, reg_b, reg_c, instrs);
 
     let mut m = Machine::new(0, reg_a, reg_b, reg_c, instrs);
     while m.execute() {}
