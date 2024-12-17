@@ -117,9 +117,8 @@ impl Machine {
             return false;
         }
         let insn = self.insn[self.ip];
-        let a_div_op = |combo_operand: ComboOperand| {
-            self.a / pow::pow(2u64, self.get_combo_op_val(combo_operand) as usize)
-        };
+        let a_div_op =
+            |combo_operand: ComboOperand| self.a >> self.get_combo_op_val(combo_operand) as usize;
         let mut skip_ip_incr = false;
         match insn {
             Insn::Adv(combo_operand) => {
@@ -130,7 +129,7 @@ impl Machine {
             Insn::Jnz(op) => {
                 if self.a != 0 {
                     skip_ip_incr = true;
-                    self.ip = op as usize / 2;
+                    self.ip = op as usize >> 1;
                 }
             }
             Insn::Bxc => self.b ^= self.c,
@@ -175,6 +174,7 @@ pub fn part_one(input: &str) -> Option<u32> {
     None
 }
 
+// helper that creates the bits of an octet
 fn val_to_sl(v: u8) -> [u8; 3] {
     if v > 7 {
         panic!("bad")
@@ -196,7 +196,7 @@ fn val_to_sl(v: u8) -> [u8; 3] {
 // each row contains the values that need to be at IDX_XOR in order to produce desired number (column)
 
 // so row 4 corresponding to 3 (011), column 2 corresponding to 1 (001) has value (010) (011^001 = 010)
-// this says that if you want to output 1, when the lowest bits are 011, bits (7-4) 3, 4, 5 must be set to 010
+// this says that if you want to output 1, when the lowest bits are 011, bits (7 - 4 the IDX_XOR) 3, 4, 5 must be set to 010
 // this table is crucial to the construction of the final number
 fn get_table() -> Table {
     let mut result = [[[EMPTY; 3]; 8]; 8];
@@ -292,6 +292,12 @@ fn solve(tbl: &Table, field: &mut NumField, idx: usize, targets: &Vec<u8>) {
 
         let candidate = line[target as usize];
         let candidate_idx = field_idx + (7 - i);
+        // this check below and the "fits" check above cannot be merged because some
+        // overlaps between bits and candidate (eg. when candidate_idx == 0)
+        // are invalid (and become apparent only after the first merge is complete)
+        // this could be tackled in the table itself (having an empty entry)
+        // or directly here by comparing candidate and field_idx and should they overlap
+        // the candidate and bits bitfields
         if !fits(field, candidate_idx, &candidate) {
             *field = prev;
             continue;
@@ -321,7 +327,6 @@ fn get_num(field: &NumField) -> u64 {
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    // let mut a: u64 = u64::MAX / 8;
     let (_, _, _, _, orig) = parse_init(input);
     let tbl = get_table();
 
