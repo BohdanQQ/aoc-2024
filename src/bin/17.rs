@@ -1,5 +1,3 @@
-use std::{thread, u64};
-
 use pathfinding::num_traits::pow;
 
 advent_of_code::solution!(17);
@@ -29,7 +27,7 @@ enum Insn {
 impl From<u8> for ComboOperand {
     fn from(value: u8) -> Self {
         match value {
-            0 | 1 | 2 | 3 => ComboOperand::SmallLit(value.into()),
+            0..=3 => ComboOperand::SmallLit(value.into()),
             4 => ComboOperand::A,
             5 => ComboOperand::B,
             6 => ComboOperand::C,
@@ -148,7 +146,7 @@ impl Machine {
         }
         true
     }
-
+    // used for bruteforce attempt xd
     pub fn inspect(&self, expected: &[u8]) -> bool {
         for (i, v) in self.results.iter().enumerate() {
             if i < expected.len() && *v != expected[i] {
@@ -168,36 +166,207 @@ impl Machine {
 }
 
 pub fn part_one(input: &str) -> Option<u32> {
-    let (regA, regB, regC, instrs, _) = parse_init(input);
-    // println!("inputs {} {} {} {:?}", regA, regB, regC, instrs);
+    let (reg_a, reg_b, reg_c, instrs, _) = parse_init(input);
+    println!("inputs {} {} {} {:?}", reg_a, reg_b, reg_c, instrs);
 
-    let mut m = Machine::new(0, regA, regB, regC, instrs);
+    let mut m = Machine::new(0, reg_a, reg_b, reg_c, instrs);
     while m.execute() {}
     println!("{:?}", m.results);
     None
 }
 
-pub fn part_two(input: &str) -> Option<u32> {
-    // let mut a: u64 = 0; //1000000000000
-    // let (_, reg_b, reg_c, instrs, orig) = parse_init(input);
-    // let mut m = Machine::new(0, a, reg_b, reg_c, instrs);
-    // loop {
-    //     m.reset(0, a, reg_b, reg_c);
-    //     if a % 100000000 == 0 {
-    //         println!("try {}", a);
+fn val_to_sl(v: u8) -> [u8; 3] {
+    if v > 7 {
+        panic!("bad")
+    } else {
+        let fst = (v << 7) >> 7;
+        let snd = (v << 6) >> 7;
+        let trd = (v << 5) >> 7;
+        [trd, snd, fst]
+    }
+}
+
+// a lookup table for xor values
+// my version of the input program first flips bottom 3 bits of the accumulator (A)
+// and indexes via those flipped bits (IDX_XOR further) into A - takes 3 bits from there
+// and xors the result with the bottom 3 bits of A and outputs the value
+
+// the table here has lines that correspond to bit sequences in the bottom 3 bits
+// the bit flip is (7 - number) so it is not present in the table
+// each row contains the values that need to be at IDX_XOR in order to produce desired number (column)
+
+// so row 4 corresponding to 3 (011), column 2 corresponding to 1 (001) has value (010) (011^001 = 010)
+// this says that if you want to output 1, when the lowest bits are 011, bits (7-4) 3, 4, 5 must be set to 010
+// this table is crucial to the construction of the final number
+fn get_table() -> Table {
+    let mut result = [[[EMPTY; 3]; 8]; 8];
+    for (start_val, row) in result.iter_mut().enumerate() {
+        for (target_val, cell) in row.iter_mut().enumerate() {
+            *cell = val_to_sl(start_val as u8 ^ target_val as u8);
+        }
+    }
+
+    result
+}
+
+const EMPTY: u8 = 8;
+type NumField = [u8; 64];
+type Bits = [u8; 3];
+type Table = [[Bits; 8]; 8];
+
+// checks if bits fit
+// [ ... E, E, E, 0, 1] query with [0, 1, 0] on index 1 is TRUE
+// [ ... E, E, E, 0, 1] query with [0, 1, 0] on index 0 is FALSE
+// [ ... E, E, 1, 0, 1] query with [1, 0, 1] on index 0 is TRUE
+// for the following functions, read them thus:
+//      real_idx_field - index into field from the back
+//      real_idx_bits  - index into the 3-element slice of bits
+fn fits(field: &NumField, idx: usize, bits: &Bits) -> bool {
+    for i in idx..(idx + 3).min(field.len()) {
+        let real_idx_field = field.len() - i - 1;
+        let real_idx_bits = 3 + idx - i - 1;
+        // println!("{i}, {idx} {real_idx_bits}");
+        if field[real_idx_field] != bits[real_idx_bits] && field[real_idx_field] != EMPTY {
+            return false;
+        }
+    }
+    true
+}
+
+// usless but created as a preparation (gets all possibilies that fit)
+fn possibilities(field: &NumField, idx: usize) -> Vec<Bits> {
+    let mut result: Vec<Bits> = vec![[EMPTY; 3]];
+    for i in idx..(idx + 3).min(field.len()) {
+        let real_idx_field = field.len() - i - 1;
+        let real_idx_bits = 3 + idx - i - 1;
+        if field[real_idx_field] == EMPTY {
+            let mut other = vec![];
+            for x in &mut result {
+                let mut cpy = *x;
+                x[real_idx_bits] = 0;
+                cpy[real_idx_bits] = 1;
+                other.push(cpy);
+            }
+            result.append(&mut other);
+        } else {
+            for x in &mut result {
+                x[real_idx_bits] = field[real_idx_field];
+            }
+        }
+    }
+    result
+}
+
+// merges bits
+// [ ... E, E, E, 0, 1] merge with [0, 1, 1] on index 2
+// vvvvvvvvvvvvvvvvvvvv
+// [ ... 0, 1, 1, 0, 1]
+fn merge(field: &mut NumField, idx: usize, bits: Bits) {
+    for i in idx..(idx + 3).min(field.len()) {
+        let real_idx_field = field.len() - i - 1;
+        let real_idx_bits = 3 + idx - i - 1;
+        if field[real_idx_field] == EMPTY {
+            field[real_idx_field] = bits[real_idx_bits];
+        } else if field[real_idx_field] != bits[real_idx_bits] {
+            panic!("Cannot merge {:?} {:?} at {idx}", field, bits);
+        }
+    }
+}
+
+fn solve(tbl: &Table, field: &mut NumField, idx: usize, targets: &Vec<u8>) {
+    if idx == targets.len() {
+        println!("{:?}", get_num(field));
+        return;
+    }
+
+    let field_idx = idx * 3;
+    let target = targets[idx];
+    for i in 0..8 {
+        let bits = val_to_sl(i as u8);
+        let line = tbl[i];
+        if !fits(field, field_idx, &bits) {
+            continue;
+        }
+        let prev = *field;
+        merge(field, field_idx, bits);
+
+        let candidate = line[target as usize];
+        let candidate_idx = field_idx + (7 - i);
+        if !fits(field, candidate_idx, &candidate) {
+            *field = prev;
+            continue;
+        }
+        merge(field, candidate_idx, candidate);
+
+        solve(tbl, field, idx + 1, targets);
+        *field = prev;
+    }
+}
+
+fn get_num(field: &NumField) -> u64 {
+    let mut res = 0;
+    let mut num = *field;
+    num.reverse();
+    for (i, n) in num.iter().enumerate() {
+        if *n == EMPTY {
+            break;
+        }
+        if *n == 1 {
+            res += pow::pow(2, i);
+        } else if *n != 0 {
+            panic!("invalid format!");
+        }
+    }
+    res
+}
+
+pub fn part_two(input: &str) -> Option<u64> {
+    // let mut a: u64 = u64::MAX / 8;
+    let (_, _, _, _, orig) = parse_init(input);
+    let tbl = get_table();
+
+    // for (i, line) in tbl.iter().enumerate() {
+    //     if i == 0 {
+    //         println!("at 0/ output | {:?} | {:?} | {:?} | {:?} | {:?} | {:?} | {:?} | {:?} |", val_to_sl(0),  val_to_sl(1),  val_to_sl(2),  val_to_sl(3),  val_to_sl(4),  val_to_sl(5),  val_to_sl(6),  val_to_sl(7));
+    //         println!("--------------------------------------------------------------------------------------------------------------");
     //     }
-    //     while m.execute() {
-    //         if !m.inspect(&orig) {
-    //             break;
-    //         }
+    //     print!("  {:?}  | ", val_to_sl(i as u8));
+    //     for v in line {
+    //         print!("{:?} | ", v);
     //     }
-    //     if m.results.len() == orig.len() && m.inspect(&orig) {
-    //         println!("A = {:?}", a);
-    //         return None;
-    //     }
-    //     a += 1;
+    //     println!()
     // }
-    None
+    /*
+    The above generates the following:
+      at 0/ output | [0, 0, 0] | [0, 0, 1] | [0, 1, 0] | [0, 1, 1] | [1, 0, 0] | [1, 0, 1] | [1, 1, 0] | [1, 1, 1] |
+      --------------------------------------------------------------------------------------------------------------
+        [0, 0, 0]  | [0, 0, 0] | [0, 0, 1] | [0, 1, 0] | [0, 1, 1] | [1, 0, 0] | [1, 0, 1] | [1, 1, 0] | [1, 1, 1] |
+        [0, 0, 1]  | [0, 0, 1] | [0, 0, 0] | [0, 1, 1] | [0, 1, 0] | [1, 0, 1] | [1, 0, 0] | [1, 1, 1] | [1, 1, 0] |
+        [0, 1, 0]  | [0, 1, 0] | [0, 1, 1] | [0, 0, 0] | [0, 0, 1] | [1, 1, 0] | [1, 1, 1] | [1, 0, 0] | [1, 0, 1] |
+        [0, 1, 1]  | [0, 1, 1] | [0, 1, 0] | [0, 0, 1] | [0, 0, 0] | [1, 1, 1] | [1, 1, 0] | [1, 0, 1] | [1, 0, 0] |
+        [1, 0, 0]  | [1, 0, 0] | [1, 0, 1] | [1, 1, 0] | [1, 1, 1] | [0, 0, 0] | [0, 0, 1] | [0, 1, 0] | [0, 1, 1] |
+        [1, 0, 1]  | [1, 0, 1] | [1, 0, 0] | [1, 1, 1] | [1, 1, 0] | [0, 0, 1] | [0, 0, 0] | [0, 1, 1] | [0, 1, 0] |
+        [1, 1, 0]  | [1, 1, 0] | [1, 1, 1] | [1, 0, 0] | [1, 0, 1] | [0, 1, 0] | [0, 1, 1] | [0, 0, 0] | [0, 0, 1] |
+        [1, 1, 1]  | [1, 1, 1] | [1, 1, 0] | [1, 0, 1] | [1, 0, 0] | [0, 1, 1] | [0, 1, 0] | [0, 0, 1] | [0, 0, 0] |
+     */
+
+    let mut value = [EMPTY; 64];
+    // demo for playing with the functions
+    // {
+    //     value[63] = 1;
+    //     value[62] = EMPTY;
+    //     value[61] = 1;
+    //     println!("{}", fits(&value, 2, &[0, 1, 1]));
+    //     println!("Pos:\n{:?}", possibilities(&value, 2));
+    //     merge(&mut value, 50, [0, 1, 1]);
+    //     println!("{:?}", value);
+    // }
+    solve(&tbl, &mut value, 0, &orig);
+
+    // solutions
+    // 265652340990875
+    // 265652340990877
+    Some(0)
 }
 
 #[cfg(test)]
@@ -213,6 +382,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(265652340990875));
     }
 }
