@@ -21,6 +21,7 @@ data/inputs/*
 !data/inputs/.keep
 data/puzzles/*
 !data/puzzles/.keep
+blobs/
 
 # Dhat
 dhat-heap.json

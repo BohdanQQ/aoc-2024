@@ -1,7 +1,4 @@
-use std::{
-    sync::{atomic, Arc},
-    thread,
-};
+use rayon::prelude::*;
 
 advent_of_code::solution!(6);
 
@@ -141,7 +138,7 @@ pub fn part_two(input: &str) -> Option<u32> {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let mtx = Arc::new(parsed);
+    let mtx = std::sync::Arc::new(parsed);
     let parsed = mtx.clone();
     let mut guard = (0, 0);
     for i in 0..parsed.len() {
@@ -152,42 +149,41 @@ pub fn part_two(input: &str) -> Option<u32> {
         }
     }
 
-    // 4s to 500ms (debug) (release 55ms)
-    let total = Arc::from(atomic::AtomicU32::new(0));
-    thread::scope(|c| {
-        for i in 0..parsed.len() {
-            let parsed = mtx.clone();
-            let total = total.clone();
-            c.spawn(move || {
-                let mut subtotal = 0;
-                for j in 0..parsed.len() {
-                    let (mut x, mut y) = guard;
-                    let (mut dx, mut dy) = (-1, 0);
+    // 4s to 500ms (debug) (release thread::scope 55ms) (further improvement with rayon 35ms)
+    let res = parsed
+        .iter()
+        .map(|_| mtx.clone())
+        .collect::<Vec<_>>()
+        .par_iter()
+        .enumerate()
+        .map(|(i, parsed)| {
+            let mut subtotal = 0;
+            for j in 0..parsed.len() {
+                let (mut x, mut y) = guard;
+                let (mut dx, mut dy) = (-1, 0);
 
-                    let mut working_cpy = Vec::from_iter(parsed.clone().iter().cloned());
-                    if i != x || j != y {
-                        // one could also replace just the positions from the part one,
-                        // which became marked and place an obstacle there
-                        // but since this was fast enough and actually fast to implement
-                        // i cant be bothered xd
-                        working_cpy[i][j] = Pos::Obstacle;
-                    }
+                let mut working_cpy = Vec::from_iter(parsed.clone().iter().cloned());
+                if i != x || j != y {
+                    // one could also replace just the positions from the part one,
+                    // which became marked and place an obstacle there
+                    // but since this was fast enough and actually fast to implement
+                    // i cant be bothered xd
+                    working_cpy[i][j] = Pos::Obstacle;
+                }
 
-                    loop {
-                        let res = do_step_2(&mut working_cpy, &mut x, &mut y, &mut dx, &mut dy);
-                        if let Some(b) = res {
-                            subtotal += if b { 1 } else { 0 };
-                            break;
-                        }
+                loop {
+                    let res = do_step_2(&mut working_cpy, &mut x, &mut y, &mut dx, &mut dy);
+                    if let Some(b) = res {
+                        subtotal += if b { 1 } else { 0 };
+                        break;
                     }
                 }
-                // we dont have to care since we're in a thread scope
-                total.fetch_add(subtotal, atomic::Ordering::Relaxed);
-            });
-        }
-    });
+            }
+            subtotal
+        })
+        .sum();
 
-    Some(total.load(atomic::Ordering::Relaxed))
+    Some(res)
 }
 
 #[cfg(test)]
