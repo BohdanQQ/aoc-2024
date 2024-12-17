@@ -169,7 +169,7 @@ impl Machine {
 
 pub fn part_one(input: &str) -> Option<u32> {
     let (regA, regB, regC, instrs, _) = parse_init(input);
-    println!("inputs {} {} {} {:?}", regA, regB, regC, instrs);
+    // println!("inputs {} {} {} {:?}", regA, regB, regC, instrs);
 
     let mut m = Machine::new(0, regA, regB, regC, instrs);
     while m.execute() {}
@@ -178,26 +178,26 @@ pub fn part_one(input: &str) -> Option<u32> {
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-    let mut a: u64 = 1000000000000;
-    let (_, reg_b, reg_c, instrs, orig) = parse_init(input);
-    let mut m = Machine::new(0, a, reg_b, reg_c, instrs);
-    loop {
-        m.reset(0, a, reg_b, reg_c);
-        if a % 100000000 == 0 {
-            println!("try {}", a);
-        }
-        while m.execute() {
-            if !m.inspect(&orig) {
-                break;
-            }
-        }
-        if m.results.len() == orig.len() && m.inspect(&orig) {
-            println!("A = {:?}", a);
-            return None;
-        }
-        a += 1;
-    }
-    return None;
+    // let mut a: u64 = 0; //1000000000000
+    // let (_, reg_b, reg_c, instrs, orig) = parse_init(input);
+    // let mut m = Machine::new(0, a, reg_b, reg_c, instrs);
+    // loop {
+    //     m.reset(0, a, reg_b, reg_c);
+    //     if a % 100000000 == 0 {
+    //         println!("try {}", a);
+    //     }
+    //     while m.execute() {
+    //         if !m.inspect(&orig) {
+    //             break;
+    //         }
+    //     }
+    //     if m.results.len() == orig.len() && m.inspect(&orig) {
+    //         println!("A = {:?}", a);
+    //         return None;
+    //     }
+    //     a += 1;
+    // }
+    None
 }
 
 #[cfg(test)]
