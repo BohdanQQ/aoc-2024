@@ -138,8 +138,8 @@ pub fn part_two(input: &str) -> Option<u32> {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let mtx = std::sync::Arc::new(parsed);
-    let parsed = mtx.clone();
+    let arc = std::sync::Arc::new(parsed);
+    let parsed = arc.clone();
     let mut guard = (0, 0);
     for i in 0..parsed.len() {
         for j in 0..parsed.len() {
@@ -150,9 +150,10 @@ pub fn part_two(input: &str) -> Option<u32> {
     }
 
     // 4s to 500ms (debug) (release thread::scope 55ms) (further improvement with rayon 35ms)
+    // for some reason removing the Arcs slows rayon to 50ms
     let res = parsed
         .iter()
-        .map(|_| mtx.clone())
+        .map(|_| arc.clone())
         .collect::<Vec<_>>()
         .par_iter()
         .enumerate()
