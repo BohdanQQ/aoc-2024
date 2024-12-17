@@ -1,7 +1,4 @@
-use std::{
-    sync::{atomic::AtomicU64, Arc},
-    thread,
-};
+use rayon::prelude::*;
 
 advent_of_code::solution!(7);
 
@@ -63,22 +60,16 @@ pub fn part_two(input: &str) -> Option<u64> {
             .map(|v| v.replace(':', "").parse::<u64>().unwrap())
             .collect::<Vec<_>>()
     });
-
-    let res = Arc::new(AtomicU64::new(0));
-    thread::scope(|c| {
-        for mut vec in specs {
-            let vc = vec.clone();
-            let rc = res.clone();
-            c.spawn(move || {
-                let nums = vec.split_off(1);
-                if try_num2(vc[0], &nums, 0) {
-                    rc.fetch_add(vc[0], std::sync::atomic::Ordering::Relaxed);
-                }
-            });
+    // (130ms with thread::scope, 120 ms with rayon)
+    let res : u64= specs.par_bridge().map(|vec| {
+        if try_num2(vec[0], &vec[1..], 0) {
+            vec[0]
+        } else {
+            0
         }
-    });
+    }).sum();
 
-    Some(res.load(std::sync::atomic::Ordering::Relaxed))
+    Some(res)
 }
 
 #[cfg(test)]
