@@ -1,21 +1,14 @@
-use std::{
-    collections::{HashMap, HashSet},
-    iter::{successors, Successors},
-};
+use std::collections::{HashMap, HashSet};
 
-use advent_of_code::parse_field;
 use pathfinding::directed::dijkstra;
-use rayon::{
-    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 advent_of_code::solution!(18);
 
 type NodeType = (usize, usize);
 
 fn construct_successors(
-    obstacles: &Vec<NodeType>,
+    obstacles: &[NodeType],
     bound_x: usize,
     bound_y: usize,
     obst_limit: usize,
