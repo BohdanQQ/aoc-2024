@@ -61,13 +61,16 @@ pub fn part_two(input: &str) -> Option<u64> {
             .collect::<Vec<_>>()
     });
     // (130ms with thread::scope, 120 ms with rayon)
-    let res : u64= specs.par_bridge().map(|vec| {
-        if try_num2(vec[0], &vec[1..], 0) {
-            vec[0]
-        } else {
-            0
-        }
-    }).sum();
+    let res: u64 = specs
+        .par_bridge()
+        .map(|vec| {
+            if try_num2(vec[0], &vec[1..], 0) {
+                vec[0]
+            } else {
+                0
+            }
+        })
+        .sum();
 
     Some(res)
 }
