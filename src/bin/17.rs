@@ -257,6 +257,28 @@ fn possibilities(field: &NumField, idx: usize) -> Vec<Bits> {
     result
 }
 
+fn possibilities_all(field: &NumField) -> Vec<NumField> {
+    let mut result: Vec<NumField> = vec![[EMPTY; 64]];
+    for i in 0..field.len() {
+        let real_idx_field = field.len() - i - 1;
+        if field[real_idx_field] == EMPTY {
+            let mut other = vec![];
+            for x in &mut result {
+                let mut cpy = *x;
+                x[real_idx_field] = 0;
+                cpy[real_idx_field] = 1;
+                other.push(cpy);
+            }
+            result.append(&mut other);
+        } else {
+            for x in &mut result {
+                x[real_idx_field] = field[real_idx_field];
+            }
+        }
+    }
+    result
+}
+
 // merges bits
 // [ ... E, E, E, 0, 1] merge with [0, 1, 1] on index 2
 // vvvvvvvvvvvvvvvvvvvv
@@ -272,10 +294,38 @@ fn merge(field: &mut NumField, idx: usize, bits: Bits) {
         }
     }
 }
+// outputs all solutions
+// also outputs "spurious" solutions (ones that give a sequence that contain some more
+// elements than the original one - but strictly more (for original 0 2 3 4 the spurious
+// output could be 0 2 3 4 1))
 
 fn solve(tbl: &Table, field: &mut NumField, idx: usize, targets: &Vec<u8>) {
     if idx == targets.len() {
-        println!("{:?}", get_num(field));
+        // println!("Original: \n{:?}", field);
+        for f in field.iter_mut() {
+            if *f != EMPTY {
+                break;
+            }
+            if *f == EMPTY {
+                *f = 0;
+            }
+        }
+        let mut all_seen = vec![];
+
+        for pos in possibilities_all(field) {
+            if !all_seen.contains(&pos) {
+                all_seen.push(pos);
+            }
+        }
+
+        if all_seen.is_empty() {
+            all_seen.push(*field);
+        }
+
+        for f in all_seen {
+            // println!("{:?}", &f);
+            println!("{:?}", get_num(&f));
+        }
         return;
     }
 
@@ -316,8 +366,7 @@ fn get_num(field: &NumField) -> u64 {
     for (i, n) in num.iter().enumerate() {
         if *n == EMPTY {
             break;
-        }
-        if *n == 1 {
+        } else if *n == 1 {
             res += pow::pow(2, i);
         } else if *n != 0 {
             panic!("invalid format!");
