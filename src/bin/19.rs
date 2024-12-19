@@ -54,7 +54,8 @@ pub fn part_two(input: &str) -> Option<u64> {
         // .filter(|t| possible(t, &parts)) - this makes it slower (31 -> 39ms) - there are not many impossible ones (or they are at least detected early)
         .map(|t| count_possible(t, &parts, &mut cache))
         .sum();
-
+    // ofc you could also solve p1 using this, just insert if cnt > 0 { 1 } else { 0 }
+    // into the map closure - this could shave off ~5ms (runtime of p1)
     Some(result)
 }
 
