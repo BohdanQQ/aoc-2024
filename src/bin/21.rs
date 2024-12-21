@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-advent_of_code::solution!(21);
+advent_of_code::solution!(21, 2);
 
 type Position = (u64, u64);
 
@@ -58,7 +58,7 @@ impl KeypadKey for DirectionalKey {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 enum PushInsn {
     L,
     R,
@@ -181,7 +181,6 @@ fn get_all_paths<
 >() -> HashMap<(T, T), Vec<PushSeq>> {
     let mut res = HashMap::new();
     let succ = get_all_moves();
-    println!("Succ {:?}", succ);
     for source in T::get_all() {
         for target in T::get_all() {
             let mut acc = vec![];
@@ -311,65 +310,65 @@ fn get_shortest_paths_for_steps(
     res
 }
 
-pub fn part_one(input: &str) -> Option<usize> {
+// const TARGETS : [(u64, [NumericKey; 4]); 5] = [
+// (29, [NumericKey::Number(0), NumericKey::Number(2), NumericKey::Number(9), NumericKey::Activate]),
+// (980, [NumericKey::Number(9), NumericKey::Number(8), NumericKey::Number(0), NumericKey::Activate]),
+// (179, [NumericKey::Number(1), NumericKey::Number(7), NumericKey::Number(9), NumericKey::Activate]),
+// (456, [NumericKey::Number(4), NumericKey::Number(5), NumericKey::Number(6), NumericKey::Activate]),
+// (379, [NumericKey::Number(3), NumericKey::Number(7), NumericKey::Number(9), NumericKey::Activate]),
+// ];
+
+const TARGETS: [(u64, [NumericKey; 4]); 5] = [
+    (
+        382,
+        [
+            NumericKey::Number(3),
+            NumericKey::Number(8),
+            NumericKey::Number(2),
+            NumericKey::Activate,
+        ],
+    ),
+    (
+        463,
+        [
+            NumericKey::Number(4),
+            NumericKey::Number(6),
+            NumericKey::Number(3),
+            NumericKey::Activate,
+        ],
+    ),
+    (
+        935,
+        [
+            NumericKey::Number(9),
+            NumericKey::Number(3),
+            NumericKey::Number(5),
+            NumericKey::Activate,
+        ],
+    ),
+    (
+        279,
+        [
+            NumericKey::Number(2),
+            NumericKey::Number(7),
+            NumericKey::Number(9),
+            NumericKey::Activate,
+        ],
+    ),
+    (
+        480,
+        [
+            NumericKey::Number(4),
+            NumericKey::Number(8),
+            NumericKey::Number(0),
+            NumericKey::Activate,
+        ],
+    ),
+];
+
+pub fn part_one(_: &str) -> Option<usize> {
     // not bothered with parsing xd
-    // let targets = [
-    // (29, [NumericKey::Number(0), NumericKey::Number(2), NumericKey::Number(9), NumericKey::Activate]),
-    // (980, [NumericKey::Number(9), NumericKey::Number(8), NumericKey::Number(0), NumericKey::Activate]),
-    // (179, [NumericKey::Number(1), NumericKey::Number(7), NumericKey::Number(9), NumericKey::Activate]),
-    // (456, [NumericKey::Number(4), NumericKey::Number(5), NumericKey::Number(6), NumericKey::Activate]),
-    // (379, [NumericKey::Number(3), NumericKey::Number(7), NumericKey::Number(9), NumericKey::Activate]),
-    // ];
-
-    let targets = [
-        (
-            382,
-            [
-                NumericKey::Number(3),
-                NumericKey::Number(8),
-                NumericKey::Number(2),
-                NumericKey::Activate,
-            ],
-        ),
-        (
-            463,
-            [
-                NumericKey::Number(4),
-                NumericKey::Number(6),
-                NumericKey::Number(3),
-                NumericKey::Activate,
-            ],
-        ),
-        (
-            935,
-            [
-                NumericKey::Number(9),
-                NumericKey::Number(3),
-                NumericKey::Number(5),
-                NumericKey::Activate,
-            ],
-        ),
-        (
-            279,
-            [
-                NumericKey::Number(2),
-                NumericKey::Number(7),
-                NumericKey::Number(9),
-                NumericKey::Activate,
-            ],
-        ),
-        (
-            480,
-            [
-                NumericKey::Number(4),
-                NumericKey::Number(8),
-                NumericKey::Number(0),
-                NumericKey::Activate,
-            ],
-        ),
-    ];
-
-    let results = targets
+    let results = TARGETS
         .par_iter()
         .map(|(val, target)| {
             let dir_par_insns = get_all_paths::<DirectionalKey>();
@@ -391,16 +390,129 @@ pub fn part_one(input: &str) -> Option<usize> {
 
     let mut sum = 0;
     for (val, res) in results {
-        sum += res.len() * val;
-        println!("Num {val}, len {} = {}", res.len(), res.len() * val);
+        sum += res.len() * *val as usize;
+        println!(
+            "Num {val}, len {} = {}",
+            res.len(),
+            res.len() * *val as usize
+        );
     }
 
     Some(sum)
 }
 
-pub fn part_two(input: &str) -> Option<u32> {
+type InsnPair = (PushInsn, PushInsn);
+
+fn get_shortest_paths_for_steps_in_depth(
+    steps: Vec<NumericKey>,
+    paths_num: &HashMap<NumPair, Vec<PushSeq>>,
+    paths_dir: &HashMap<DirPair, Vec<PushSeq>>,
+    cache: &mut HashMap<(InsnPair, u64), u64>,
+    robots: u64,
+) -> u64 {
+    let mut start = NumericKey::Activate;
+    let paths = steps
+        .iter()
+        .map(|v| {
+            let rv = paths_num.get(&(start, *v)).unwrap();
+            start = *v;
+            rv
+        })
+        .collect::<Vec<_>>();
+
+    let mut res = 0;
+
+    for number_paths in paths {
+        let mut best_path = 0;
+        for path in number_paths {
+            let mut start = PushInsn::A;
+            let mut path_score = 0;
+            for target in path {
+                path_score += get_shortest_paths_for_steps_in_depth_robot(
+                    &(start, *target),
+                    paths_dir,
+                    cache,
+                    robots - 1,
+                );
+                start = *target;
+            }
+            if best_path == 0 || best_path > path_score {
+                best_path = path_score;
+            }
+        }
+        res += best_path;
+    }
+
+    res
+}
+
+// works by counting nr of characters each pair of transitions (L, R, U, D, A)
+// expands to in lower layers (using cache because some pairs expand to the same
+// sequences)
+fn get_shortest_paths_for_steps_in_depth_robot(
+    (from, to): &InsnPair,
+    paths_dir: &HashMap<DirPair, Vec<PushSeq>>,
+    cache: &mut HashMap<(InsnPair, u64), u64>,
+    robots: u64,
+) -> u64 {
+    let mut best_path = 0;
+    for path in paths_dir.get(&(from.into(), to.into())).unwrap() {
+        let mut start = PushInsn::A;
+        let mut path_score = 0u64;
+        if robots == 0 {
+            // skip path score calculation (I am pushign buttons)
+            path_score = path.len() as u64;
+        } else {
+            for target in path {
+                let cache_key = ((start, *target), robots);
+                if cache.contains_key(&cache_key) {
+                    path_score += cache.get(&cache_key).unwrap();
+                } else {
+                    let res = get_shortest_paths_for_steps_in_depth_robot(
+                        &(start, *target),
+                        paths_dir,
+                        cache,
+                        robots - 1,
+                    );
+                    path_score += res;
+                    cache.insert(cache_key, res);
+                }
+                start = *target;
+            }
+        }
+        if best_path == 0 || best_path > path_score {
+            best_path = path_score;
+        }
+    }
+    best_path
+}
+
+pub fn part_two(_: &str) -> Option<u64> {
     // needs something more clever :)
-    None
+    // - haha turns out i made correct observations but skipped and
+    //   forgot about them
+    // - also, my representations in p1 also didnt help
+
+    let mut cache = HashMap::new();
+    let results = TARGETS
+        .iter()
+        .map(|(val, target)| {
+            let dir_par_insns = get_all_paths::<DirectionalKey>();
+            let num_pad_insns = get_all_paths::<NumericKey>();
+            (
+                val,
+                get_shortest_paths_for_steps_in_depth(
+                    target.to_vec(),
+                    &num_pad_insns,
+                    &dir_par_insns,
+                    &mut cache,
+                    25,
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+    let sum = results.iter().map(|a| a.0 * a.1).sum();
+    Some(sum)
 }
 
 #[cfg(test)]
