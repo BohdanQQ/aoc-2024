@@ -125,7 +125,7 @@ impl EnumAll for NumericKey {
     }
 }
 
-fn get_successors<T: EnumAll + Hash + Eq + PartialEq + Sized + KeypadKey + Copy>(
+fn get_all_moves<T: EnumAll + Hash + Eq + PartialEq + Sized + KeypadKey + Copy>(
 ) -> HashMap<T, Vec<(T, PushInsn)>> {
     let mut res = HashMap::new();
     let get_dirs = |from: Position| {
@@ -148,7 +148,7 @@ fn get_successors<T: EnumAll + Hash + Eq + PartialEq + Sized + KeypadKey + Copy>
     res
 }
 
-fn get_all_paths_dir_pad_impl<T: Eq + PartialEq + Hash + Clone + Copy>(
+fn get_all_paths_impl<T: Eq + PartialEq + Hash + Clone + Copy>(
     from: T,
     to: T,
     visited: &mut HashSet<T>,
@@ -168,7 +168,7 @@ fn get_all_paths_dir_pad_impl<T: Eq + PartialEq + Hash + Clone + Copy>(
 
     for (next, dir) in moves.get(&from).unwrap() {
         acc_now.push(*dir);
-        get_all_paths_dir_pad_impl(*next, to, visited, moves, acc_now, acc_all);
+        get_all_paths_impl(*next, to, visited, moves, acc_now, acc_all);
         assert!(acc_now.pop().unwrap() == *dir);
     }
     visited.remove(&from);
@@ -180,12 +180,12 @@ fn get_all_paths<
     T: EnumAll + Eq + PartialEq + Hash + std::fmt::Debug + Clone + Copy + KeypadKey,
 >() -> HashMap<(T, T), Vec<PushSeq>> {
     let mut res = HashMap::new();
-    let succ = get_successors();
+    let succ = get_all_moves();
     println!("Succ {:?}", succ);
     for source in T::get_all() {
         for target in T::get_all() {
             let mut acc = vec![];
-            get_all_paths_dir_pad_impl(
+            get_all_paths_impl(
                 source,
                 target,
                 &mut HashSet::new(),
@@ -220,22 +220,21 @@ fn expand_paths(
     paths_dir: &HashMap<DirPair, Vec<PushSeq>>,
     current_min: Option<usize>,
 ) -> Vec<Vec<PushInsn>> {
-    let mut res: Vec<Vec<PushInsn>> = Vec::with_capacity(cand.len() * 5);
-    res.push(vec![]);
+    let mut res: Vec<Vec<PushInsn>> = vec![vec![]];
     let mut from_loc = DirectionalKey::Activate;
     for x in cand {
-        let mut new_res = vec![];
+        let mut new_res = Vec::with_capacity(256);
         for expansion in paths_dir.get(&(from_loc, x.into())).unwrap() {
-            for r in res.iter() {
+            for r in res.iter_mut() {
                 if let Some(min) = current_min {
                     if r.len() + expansion.len() >= min {
                         continue;
                     }
                 }
-                let mut expanded = vec![];
-                let mut cpy = [r.clone(), expansion.clone()].concat();
-                expanded.append(&mut cpy);
-                new_res.push(expanded);
+                let mut c = r.clone();
+                c.reserve(expansion.len());
+                c.extend(expansion.iter());
+                new_res.push(c);
             }
         }
         std::mem::swap(&mut res, &mut new_res);
@@ -254,76 +253,31 @@ fn get_shortest_paths_source_target(
 
     let mut set = false;
     let mut min_path = vec![];
+    // cand consists of all possible paths (from, target)
     for (ci, cand) in paths_num.get(&(from, target)).unwrap().iter().enumerate() {
-        // cant ignore paths after firs expansion - they are not complete yet!
-        let res: Vec<Vec<PushInsn>> = expand_paths(cand, paths_dir, None);
-        let mut set2 = false;
-        let mut min_path2 = vec![];
-        println!(
-            "{}, {} ({ci} / {})",
-            res.len(),
-            min_path.len(),
-            paths_num.get(&(from, target)).unwrap().len()
-        );
-        for (i, cand2) in res.iter().enumerate() {
-            let min = if set {
-                Some(min_path.len())
-            } else if set2 {
-                Some(min_path2.len())
-            } else {
-                None
-            };
+        let min = if set { Some(min_path.len()) } else { None };
+        // we try to expand each move by each move on a keypad
+        for (i, cand2) in expand_paths(cand, paths_dir, min).iter().enumerate() {
+            // for those moves we expand again
+            let min = if set { Some(min_path.len()) } else { None };
             let tmp = expand_paths(cand2, paths_dir, min);
+            // those are the final paths, get nonempty shortest paths
             if let Some(p) = tmp
                 .iter()
                 .filter(|v| !v.is_empty())
                 .min_by(|a, b| a.len().cmp(&b.len()))
             {
-                if !set2 || p.len() < min_path2.len() {
-                    min_path2 = p.clone();
-                    set2 = true;
-                    println!("2 {:?}", p);
+                // and register it
+                if !set || p.len() < min_path.len() {
+                    min_path = p.clone();
+                    set = true;
+                    // println!("2 {:?}", p);
                 }
             }
-        }
-        if set2 && (!set || min_path2.len() < min_path.len()) {
-            min_path = min_path2.clone();
-            println!("1 {:?}", min_path);
-            set = true;
         }
     }
     if !min_path.is_empty() {
         res.insert((from, target), min_path);
-    }
-    res
-}
-
-fn get_shortest_paths_single_source(
-    from: NumericKey,
-    paths_num: &HashMap<NumPair, Vec<PushSeq>>,
-    paths_dir: &HashMap<DirPair, Vec<PushSeq>>,
-) -> HashMap<NumPair, PushSeq> {
-    let mut res = HashMap::new();
-
-    for target in NumericKey::get_all() {
-        let partial_res = get_shortest_paths_source_target(from, target, paths_num, paths_dir);
-        for (k, v) in partial_res {
-            res.insert(k, v);
-        }
-    }
-    res
-}
-
-fn get_shortest_paths_all(
-    paths_num: &HashMap<NumPair, Vec<PushSeq>>,
-    paths_dir: &HashMap<DirPair, Vec<PushSeq>>,
-) -> HashMap<NumPair, PushSeq> {
-    let mut res = HashMap::new();
-    for source in NumericKey::get_all() {
-        let partial_res = get_shortest_paths_single_source(source, paths_num, paths_dir);
-        for (k, v) in partial_res {
-            res.insert(k, v);
-        }
     }
     res
 }
