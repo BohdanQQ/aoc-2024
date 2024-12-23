@@ -7,38 +7,18 @@ advent_of_code::solution!(23);
 type SuccMapVec<'a> = HashMap<&'a str, Vec<&'a str>>;
 type SuccMapSet<'a> = HashMap<&'a str, HashSet<&'a str>>;
 
-fn get_successors<'a>(input: &'a str) -> (SuccMapVec<'a>, SuccMapSet<'a>) {
-    let mut result = HashMap::new();
-    let mut result2 = HashMap::new();
+fn get_successors(input: &str) -> (SuccMapVec, SuccMapSet) {
+    let mut result: SuccMapVec = HashMap::new();
+    let mut result2: SuccMapSet = HashMap::new();
     for line in input.split_ascii_whitespace() {
         let split = line.split('-').collect::<Vec<_>>();
         assert!(split.len() == 2);
         let v1 = split[0];
         let v2 = split[1];
-        result
-            .entry(v1)
-            .and_modify(|vec: &mut Vec<&'a str>| vec.push(v2))
-            .or_insert(vec![&v2]);
-        result
-            .entry(v2)
-            .and_modify(|vec: &mut Vec<&'a str>| vec.push(v1))
-            .or_insert(vec![&v1]);
-        let mut tmp = HashSet::new();
-        tmp.insert(v2);
-        result2
-            .entry(v1)
-            .and_modify(|hs: &mut HashSet<&'a str>| {
-                hs.insert(v2);
-            })
-            .or_insert(tmp.clone());
-        tmp.remove(v2);
-        tmp.insert(v1);
-        result2
-            .entry(v2)
-            .and_modify(|hs: &mut HashSet<&'a str>| {
-                hs.insert(v1);
-            })
-            .or_insert(tmp);
+        result.entry(v1).or_default().push(v2);
+        result.entry(v2).or_default().push(v1);
+        result2.entry(v1).or_default().insert(v2);
+        result2.entry(v2).or_default().insert(v1);
     }
 
     (result, result2)
@@ -168,14 +148,13 @@ fn find_clique_count<'a>(
 
 pub fn part_two(input: &str) -> Option<String> {
     let (successors, successors_hash) = get_successors(input);
-    let mut clique_size = 3;
+    let mut clique_size = 4;
     let mut previous_cache = (0, HashSet::new());
 
     let res = loop {
-        println!("try size {}", clique_size);
         // BEGIN cutting (ignore this)
         // - this secttion attempts to cut the nodes accoring to the required clique size
-        // (it does nothign because the input nodes all have same amount of neighbours)
+        // (it does nothing because the input nodes all have same amount of neighbours)
         let filtered = successors
             .iter()
             .filter(|(_, v)| v.len() >= clique_size - 1);
@@ -247,8 +226,7 @@ pub fn part_two(input: &str) -> Option<String> {
         if map_res.len() == 1 {
             break Some(map_res);
         } else {
-            println!("{:?}", map_res.iter().max_by(|a, b| a.len().cmp(&b.len())));
-            println!("Count: {}", map_res.len());
+            println!("N-Cliques: N = {} Count = {}", clique_size, map_res.len());
             previous_cache = (clique_size, map_res);
         }
         clique_size += 1;
