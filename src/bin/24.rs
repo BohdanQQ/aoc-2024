@@ -179,6 +179,24 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
     // for non +1 test cases you can also jus try R - (result) and look at the
     // near bits from this subtraction
 
+    /*
+    maermaid chart i created (could be better, representing the gates as nodes instead):
+    flowchart
+    x03 -->|AND| fkm
+    y03 -->|AND| fkm
+    x03 -->|XOR| htb
+    y03 -->|XOR| htb
+    x04 -->|AND| btd
+    y04 -->|AND| btd
+    ...
+    x44...
+    mqs -->|XOR| z01
+    mpf -->|XOR| z01
+
+    overall this was very mechanical and fits with the proposed solution based on pattern matching
+    (all of those however rely on the structure of the bit-adder without any redundant gates, etc.)
+     */
+
     return None;
     let (values, formulae) = parse(input);
     let formula_map: HashMap<&'a str, Operator<'a>> =
