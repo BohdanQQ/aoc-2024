@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use pathfinding::num_traits::pow;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 advent_of_code::solution!(24);
@@ -198,17 +199,25 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
         let mut my_formulae = formula_map.clone();
         for j in i + 1..pairs.len() {
             if j % 10 == 0 {
-                println!("{j}/{}", pairs.len());
+                println!("{i}: {j}/{}", pairs.len());
             }
             for k in j + 1..pairs.len() {
-                for l in k + 1..pairs.len() {
+                'reset: for l in k + 1..pairs.len() {
                     let col = [pairs[i], pairs[j], pairs[k], pairs[l]];
                     swapped_wires(&col, &mut my_formulae);
                     let mut my_values = values.clone();
                     let mut z_vals = get_vals_starting_with(&my_formulae, "z");
-                    for z in &z_vals {
+                    z_vals.sort();
+                    for (pow, z) in z_vals.iter().enumerate() {
                         let mut set = HashSet::new();
                         calculate(z, &my_formulae, &mut my_values, &mut set);
+                        // checks if the corresponding bit is correct, if not, we end iteration early
+                        if !my_values.contains_key(z)
+                            || *my_values.get(z).unwrap()
+                                != if target & (1 << pow) == 0 { 0 } else { 1 }
+                        {
+                            break 'reset;
+                        }
                     }
                     if let Some(v) = get_num(&mut z_vals, &my_values) {
                         if v == target {
