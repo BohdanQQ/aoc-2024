@@ -195,6 +195,20 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
 
     overall this was very mechanical and fits with the proposed solution based on pattern matching
     (all of those however rely on the structure of the bit-adder without any redundant gates, etc.)
+
+    another solution outlined in the
+    // checks if the corresponding bit is correct, if not, we end iteration early
+    comment is to check evaluation of a single bit and only proceed if that bit is correct
+
+    another solution technique would construct a graph and look for cycles
+    or irregularities in the evaluation of individual bits z02 - z44.
+
+    also, one of the previous commits had an optimized swapping function (swapped_wires)
+    which didn't clone the formula map, it just replaced the wires since
+    the assignment says they can't overlap.
+
+    I rolled it back because something broke down elsewhere and I found it easier to go back to the cloning
+    - more pure - implementation (it made the searching much faster tho)
      */
 
     return None;
