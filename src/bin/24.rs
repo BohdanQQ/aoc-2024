@@ -150,7 +150,10 @@ fn pairs<'a>(uni: &[&'a str]) -> Vec<(&'a str, &'a str)> {
     res
 }
 
-fn swapped_wires<'a>(pairs: &[(&'a str, &'a str)], formulae: &HashMap<&'a str, Operator<'a>>) -> HashMap<&'a str, Operator<'a>> {
+fn swapped_wires<'a>(
+    pairs: &[(&'a str, &'a str)],
+    formulae: &HashMap<&'a str, Operator<'a>>,
+) -> HashMap<&'a str, Operator<'a>> {
     let mut res = formulae.clone();
     for (w1, w2) in pairs {
         let w2val = formulae.get(w2).unwrap();
@@ -225,67 +228,81 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
     println!("1: {in1}");
     println!("2: {in2}");
     println!("Target: {target}");
-        // yea this wont work... still worth a try? xdd
-        // still not working xdd
-        //
-        // there is a clear solution - pattern matching of a bit-adder from the bottom up
-        //
-        // we match z00 = x00 XOR y00
-        // then z01 = CARRY XOR BOTTOM
-        // and look up CARRY as x00 AND y00 and BOTTOM as x01 XOR y01
-        // then compare what matched with CARRY and BOTTOM with what z01 matched
-        // no match -> found swap
-        // match -> no swap, go onto next (z02 - except the AND lookup will look
-        // for A OR B indicating the carry from previous steps (matched vars)) -> induction -> done
-        // it could also be done by hand lol
-        // it's gonna be a pain though, so yea, fuck this part :)
+    // yea this wont work... still worth a try? xdd
+    // still not working xdd
+    //
+    // there is a clear solution - pattern matching of a bit-adder from the bottom up
+    //
+    // we match z00 = x00 XOR y00
+    // then z01 = CARRY XOR BOTTOM
+    // and look up CARRY as x00 AND y00 and BOTTOM as x01 XOR y01
+    // then compare what matched with CARRY and BOTTOM with what z01 matched
+    // no match -> found swap
+    // match -> no swap, go onto next (z02 - except the AND lookup will look
+    // for A OR B indicating the carry from previous steps (matched vars)) -> induction -> done
+    // it could also be done by hand lol
+    // it's gonna be a pain though, so yea, fuck this part :)
     pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
         // 'reset: for j in i + 1..pairs.len() {
         //     if !check_pair(&pairs[i], &[pairs[j]]) {
         //         // println!("check {:?}", col);
         //         continue;
         //     }
-            let col = &[];
-            let my_formulae = swapped_wires(col, &formula_map);
-            let mut z_vals = get_vals_starting_with(&my_formulae, "z");
-            z_vals.sort();
-            let mut all = true;
-            let mut tries = (0..45).map(|i| (pow::pow(2, i) as u64, 1 as u64, pow::pow(2, i) as u64 + 1 as u64)).collect::<Vec<_>>();
-            tries.push((in1, in2, target));
-            if i % 100 == 0 {
-                println!("{i}");
+        let col = &[];
+        let my_formulae = swapped_wires(col, &formula_map);
+        let mut z_vals = get_vals_starting_with(&my_formulae, "z");
+        z_vals.sort();
+        let mut all = true;
+        let mut tries = (0..45)
+            .map(|i| {
+                (
+                    pow::pow(2, i) as u64,
+                    1 as u64,
+                    pow::pow(2, i) as u64 + 1 as u64,
+                )
+            })
+            .collect::<Vec<_>>();
+        tries.push((in1, in2, target));
+        if i % 100 == 0 {
+            println!("{i}");
+        }
+        for (one, two, target) in tries {
+            let mut my_values: HashMap<String, u8> = HashMap::new();
+            for i in (0..46) {
+                my_values.insert(
+                    ('x'.to_string() + &format!("{:02}", i)),
+                    if one & (1 << i) == 0 { 0u8 } else { 1u8 },
+                );
+                my_values.insert(
+                    ('y'.to_string() + &format!("{:02}", i)),
+                    if two & (1 << i) == 0 { 0u8 } else { 1u8 },
+                );
             }
-            for (one, two, target) in tries {
-                let mut my_values :HashMap<String, u8> = HashMap::new();
-                for i in (0..46) {
-                    my_values.insert(('x'.to_string() + &format!("{:02}", i)), if one & (1 << i) == 0 { 0u8 } else { 1u8 });
-                    my_values.insert(('y'.to_string() + &format!("{:02}", i)), if two & (1 << i) == 0 { 0u8 } else { 1u8 });
-                }
-                for (pow, z) in z_vals.iter().enumerate() {
-                    let mut set = HashSet::new();
-                    calculate(z, &my_formulae, &mut my_values, &mut set);
-                    // checks if the corresponding bit is correct, if not, we end iteration early
-                    // if !my_values.contains_key(z)
-                    //     || *my_values.get(z).unwrap()
-                    //         != if target & (1 << pow) == 0 { 0 } else { 1 }
-                    // {
-                    //     break 'reset;
-                    // }
-                }
-                if let Some(v) = get_num(&mut z_vals, &my_values) {
-                    if v == target {
-                        // println!("RESULT {:?}", col);
-                    } else {
-                        all  = false;
-                        // println!("fail: {:?} {one} {two} {target}", v)
-                    }
+            for (pow, z) in z_vals.iter().enumerate() {
+                let mut set = HashSet::new();
+                calculate(z, &my_formulae, &mut my_values, &mut set);
+                // checks if the corresponding bit is correct, if not, we end iteration early
+                // if !my_values.contains_key(z)
+                //     || *my_values.get(z).unwrap()
+                //         != if target & (1 << pow) == 0 { 0 } else { 1 }
+                // {
+                //     break 'reset;
+                // }
+            }
+            if let Some(v) = get_num(&mut z_vals, &my_values) {
+                if v == target {
+                    // println!("RESULT {:?}", col);
                 } else {
                     all = false;
+                    // println!("fail: {:?} {one} {two} {target}", v)
                 }
+            } else {
+                all = false;
             }
-            if all {
-                println!("RESULT {:?}", col);
-            }
+        }
+        if all {
+            println!("RESULT {:?}", col);
+        }
         // }
     });
     // for testing example input
