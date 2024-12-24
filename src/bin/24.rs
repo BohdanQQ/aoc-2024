@@ -154,8 +154,8 @@ fn swapped_wires<'a>(pairs: &[(&'a str, &'a str)], formulae: &mut HashMap<&'a st
     for (w1, w2) in pairs {
         let w2val = formulae.remove(w2).unwrap();
         let w1val = formulae.remove(w1).unwrap();
-        formulae.insert(w2, w1val);
         formulae.insert(w1, w2val);
+        formulae.insert(w2, w1val);
     }
 }
 
@@ -191,18 +191,53 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
             None
         }
     }
-    let target = get_num(&mut get_vals_startin_with_v(&values, "x"), &values).unwrap()
-        + get_num(&mut get_vals_startin_with_v(&values, "y"), &values).unwrap();
+
+    fn check_pair(pair: &(&str, &str), pairs: &[(&str, &str)]) -> bool {
+        for p in pairs {
+            if p.0 == pair.0 || p.0 == pair.1 || p.1 == pair.0 || p.1 == pair.1 {
+                return false;
+            }
+        }
+        true
+    }
+
+    let in1 = get_num(&mut get_vals_startin_with_v(&values, "x"), &values).unwrap();
+    let in2 = get_num(&mut get_vals_startin_with_v(&values, "y"), &values).unwrap();
+    let target = in1 + in2;
+    println!("1: {in1}");
+    println!("2: {in2}");
     println!("Target: {target}");
-    // yea this wont work... still worth a try? xdd
+        // yea this wont work... still worth a try? xdd
+        // still not working xdd
+        //
+        // there is a clear solution - pattern matching of a bit-adder from the bottom up
+        //
+        // we match z00 = x00 XOR y00
+        // then z01 = CARRY XOR BOTTOM
+        // and look up CARRY as x00 AND y00 and BOTTOM as x01 XOR y01
+        // then compare what matched with CARRY and BOTTOM with what z01 matched
+        // no match -> found swap
+        // match -> no swap, go onto next (z02 - except the AND lookup will look
+        // for A OR B indicating the carry from previous steps (matched vars)) -> induction -> done
+        // it could also be done by hand lol
+        // it's gonna be a pain though, so yea, fuck this part :)
     pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
         let mut my_formulae = formula_map.clone();
         for j in i + 1..pairs.len() {
-            if j % 10 == 0 {
+            if !check_pair(&pairs[i], &[pairs[j]]) {
+                continue;
+            }
+            if j % 1000 == 0 {
                 println!("{i}: {j}/{}", pairs.len());
             }
             for k in j + 1..pairs.len() {
+                if !check_pair(&pairs[k], &[pairs[i], pairs[j]]) {
+                    continue;
+                }
                 'reset: for l in k + 1..pairs.len() {
+                    if !check_pair(&pairs[l], &[pairs[k], pairs[i], pairs[j]]) {
+                        continue;
+                    }
                     let col = [pairs[i], pairs[j], pairs[k], pairs[l]];
                     swapped_wires(&col, &mut my_formulae);
                     let mut my_values = values.clone();
@@ -221,7 +256,7 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
                     }
                     if let Some(v) = get_num(&mut z_vals, &my_values) {
                         if v == target {
-                            println!("RESULT {:?}", pairs);
+                            println!("RESULT {:?}", col);
                         }
                     }
                     swapped_wires(&col, &mut my_formulae);
@@ -229,6 +264,41 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
             }
         }
     });
+    // for testing example input
+    // println!("AND Target: {}", in1 & in2);
+    // let target = in1 & in2;
+    // pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
+    //     let mut my_formulae = formula_map.clone();
+    //     'reset: for j in i + 1..pairs.len() {
+    //         if pairs[i].0 == pairs[j].0 || pairs[i].0 == pairs[j].1 || pairs[i].1 == pairs[j].0 || pairs[i].1 == pairs[j].1 {
+    //             continue;
+    //         }
+    //         let col = [pairs[i], pairs[j]];
+    //         // println!("C: {:?}", col);
+    //         swapped_wires(&col, &mut my_formulae);
+    //         let mut my_values = values.clone();
+    //         let mut z_vals = get_vals_starting_with(&my_formulae, "z");
+    //         z_vals.sort();
+    //         for (pow, z) in z_vals.iter().enumerate() {
+    //             let mut set = HashSet::new();
+    //             calculate(z, &my_formulae, &mut my_values, &mut set);
+    //             // checks if the corresponding bit is correct, if not, we end iteration early
+    //             if !my_values.contains_key(z)
+    //                 || *my_values.get(z).unwrap()
+    //                     != if target & (1 << pow) == 0 { 0 } else { 1 }
+    //             {
+    //                 break 'reset;
+    //             }
+    //         }
+    //         if let Some(v) = get_num(&mut z_vals, &my_values) {
+    //             if v == target {
+    //                 println!("RESULT {:?}", col);
+    //             }
+    //             // println!("{v}");
+    //         }
+    //         swapped_wires(&col, &mut my_formulae);
+    //     }
+    // });
     None
 }
 
