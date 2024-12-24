@@ -60,13 +60,13 @@ impl<'a> From<&'a str> for Operator<'a> {
     }
 }
 
-fn parse(input: &str) -> (HashMap<&str, u8>, Vec<(Operator, &str)>) {
+fn parse(input: &str) -> (HashMap<String, u8>, Vec<(Operator, &str)>) {
     let mut initial_value_map = HashMap::new();
     let lines = input.split("\n").collect::<Vec<_>>();
     for l in lines.iter().take_while(|v| !v.is_empty()) {
         let split = l.split(": ").collect::<Vec<_>>();
         assert!(split.len() == 2);
-        initial_value_map.insert(split[0], split[1].parse::<u8>().unwrap());
+        initial_value_map.insert(split[0].to_owned(), split[1].parse::<u8>().unwrap());
     }
 
     let mut operators = vec![];
@@ -86,7 +86,7 @@ fn parse(input: &str) -> (HashMap<&str, u8>, Vec<(Operator, &str)>) {
 fn calculate<'a, 'b>(
     target: &'a str,
     formulae: &'b HashMap<&str, Operator<'_>>,
-    values: &mut HashMap<&'a str, u8>,
+    values: &mut HashMap<String, u8>,
     set: &mut HashSet<String>,
 ) where
     'b: 'a,
@@ -99,17 +99,17 @@ fn calculate<'a, 'b>(
     if let Some(formula) = formulae.get(target) {
         let deps = formula.get_dependencies();
         for dep in deps.iter() {
-            if values.contains_key(dep) {
+            if values.contains_key(dep.to_owned()) {
                 continue;
             }
             calculate(dep, formulae, values, set);
         }
-        if deps.iter().all(|v| values.get(v).is_some()) {
+        if deps.iter().all(|v| values.get(v.to_owned()).is_some()) {
             let vals = deps
                 .iter()
-                .map(|v| *values.get(v).unwrap())
+                .map(|v| *values.get(v.to_owned()).unwrap())
                 .collect::<Vec<_>>();
-            values.insert(target, formula.calculate(&vals));
+            values.insert(target.to_owned(), formula.calculate(&vals));
         }
     }
     set.remove(&target.to_owned());
@@ -134,7 +134,7 @@ pub fn part_one<'a>(input: &'a str) -> Option<u64> {
     Some(
         z_vals
             .iter()
-            .map(|z| values.get(z).unwrap())
+            .map(|z| values.get(z.to_owned()).unwrap())
             .rev()
             .fold(0u64, |prev, next| prev * 2 + *next as u64),
     )
@@ -150,35 +150,53 @@ fn pairs<'a>(uni: &[&'a str]) -> Vec<(&'a str, &'a str)> {
     res
 }
 
-fn swapped_wires<'a>(pairs: &[(&'a str, &'a str)], formulae: &mut HashMap<&'a str, Operator<'a>>) {
+fn swapped_wires<'a>(pairs: &[(&'a str, &'a str)], formulae: &HashMap<&'a str, Operator<'a>>) -> HashMap<&'a str, Operator<'a>> {
+    let mut res = formulae.clone();
     for (w1, w2) in pairs {
-        let w2val = formulae.remove(w2).unwrap();
-        let w1val = formulae.remove(w1).unwrap();
-        formulae.insert(w1, w2val);
-        formulae.insert(w2, w1val);
+        let w2val = formulae.get(w2).unwrap();
+        let w1val = formulae.get(w1).unwrap();
+        res.insert(w1, *w2val);
+        res.insert(w2, *w1val);
     }
+    res
 }
 
 pub fn part_two<'a>(input: &'a str) -> Option<u32> {
+    // solution mps z25 vcv z13 vwp  z19 vjv cqm
+    // the first two are mismatch on XOR gates for x y -> z
+    // the other two are mismatches in the combination gates
+    // i found this by visualizing and sorting the chart (mermaid tool)
+    //
+    // to help me find them properly I compared results for A + 1 = R
+    // A = 2**i i = 0 ..46 and compared the results with R
+    // if they didnt match, there was a problem in the neighbourhood of i-1, i, i+1
+    // which concentrates you towards the answer, here lies my battleground
+    // for this task which does not even work :) XD (for the last, correctly replaced pair, one)
+    // instance overflows i32 which gets casted badly i guess)
+    // for non +1 test cases you can also jus try R - (result) and look at the
+    // near bits from this subtraction
+
+    return None;
     let (values, formulae) = parse(input);
     let formula_map: HashMap<&'a str, Operator<'a>> =
         HashMap::from_iter(formulae.iter().map(|(form, res_name)| (*res_name, *form)));
     let pairs = pairs(&formula_map.keys().cloned().collect::<Vec<_>>());
 
-    fn get_vals_starting_with<'b>(map: &HashMap<&'b str, Operator<'b>>, c: &str) -> Vec<&'b str> {
+    fn get_vals_starting_with<'b>(map: &HashMap<&'b str, Operator<'b>>, c: &str) -> Vec<String> {
         map.keys()
             .cloned()
             .filter(|k| k.starts_with(c))
+            .map(|v| v.to_owned())
             .collect::<Vec<_>>()
     }
 
-    fn get_vals_startin_with_v<'b>(map: &HashMap<&'b str, u8>, c: &str) -> Vec<&'b str> {
+    fn get_vals_startin_with_v(map: &HashMap<String, u8>, c: &str) -> Vec<String> {
         map.keys()
             .cloned()
             .filter(|k| k.starts_with(c))
             .collect::<Vec<_>>()
     }
-    fn get_num(vals: &mut [&str], vals_map: &HashMap<&str, u8>) -> Option<u64> {
+    fn get_num(vals: &mut [String], vals_map: &HashMap<String, u8>) -> Option<u64> {
         vals.sort();
         if vals.iter().all(|z| vals_map.get(z).is_some()) {
             Some(
@@ -222,47 +240,53 @@ pub fn part_two<'a>(input: &'a str) -> Option<u32> {
         // it could also be done by hand lol
         // it's gonna be a pain though, so yea, fuck this part :)
     pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
-        let mut my_formulae = formula_map.clone();
-        for j in i + 1..pairs.len() {
-            if !check_pair(&pairs[i], &[pairs[j]]) {
-                continue;
+        // 'reset: for j in i + 1..pairs.len() {
+        //     if !check_pair(&pairs[i], &[pairs[j]]) {
+        //         // println!("check {:?}", col);
+        //         continue;
+        //     }
+            let col = &[];
+            let my_formulae = swapped_wires(col, &formula_map);
+            let mut z_vals = get_vals_starting_with(&my_formulae, "z");
+            z_vals.sort();
+            let mut all = true;
+            let mut tries = (0..45).map(|i| (pow::pow(2, i) as u64, 1 as u64, pow::pow(2, i) as u64 + 1 as u64)).collect::<Vec<_>>();
+            tries.push((in1, in2, target));
+            if i % 100 == 0 {
+                println!("{i}");
             }
-            if j % 1000 == 0 {
-                println!("{i}: {j}/{}", pairs.len());
-            }
-            for k in j + 1..pairs.len() {
-                if !check_pair(&pairs[k], &[pairs[i], pairs[j]]) {
-                    continue;
+            for (one, two, target) in tries {
+                let mut my_values :HashMap<String, u8> = HashMap::new();
+                for i in (0..46) {
+                    my_values.insert(('x'.to_string() + &format!("{:02}", i)), if one & (1 << i) == 0 { 0u8 } else { 1u8 });
+                    my_values.insert(('y'.to_string() + &format!("{:02}", i)), if two & (1 << i) == 0 { 0u8 } else { 1u8 });
                 }
-                'reset: for l in k + 1..pairs.len() {
-                    if !check_pair(&pairs[l], &[pairs[k], pairs[i], pairs[j]]) {
-                        continue;
+                for (pow, z) in z_vals.iter().enumerate() {
+                    let mut set = HashSet::new();
+                    calculate(z, &my_formulae, &mut my_values, &mut set);
+                    // checks if the corresponding bit is correct, if not, we end iteration early
+                    // if !my_values.contains_key(z)
+                    //     || *my_values.get(z).unwrap()
+                    //         != if target & (1 << pow) == 0 { 0 } else { 1 }
+                    // {
+                    //     break 'reset;
+                    // }
+                }
+                if let Some(v) = get_num(&mut z_vals, &my_values) {
+                    if v == target {
+                        // println!("RESULT {:?}", col);
+                    } else {
+                        all  = false;
+                        // println!("fail: {:?} {one} {two} {target}", v)
                     }
-                    let col = [pairs[i], pairs[j], pairs[k], pairs[l]];
-                    swapped_wires(&col, &mut my_formulae);
-                    let mut my_values = values.clone();
-                    let mut z_vals = get_vals_starting_with(&my_formulae, "z");
-                    z_vals.sort();
-                    for (pow, z) in z_vals.iter().enumerate() {
-                        let mut set = HashSet::new();
-                        calculate(z, &my_formulae, &mut my_values, &mut set);
-                        // checks if the corresponding bit is correct, if not, we end iteration early
-                        if !my_values.contains_key(z)
-                            || *my_values.get(z).unwrap()
-                                != if target & (1 << pow) == 0 { 0 } else { 1 }
-                        {
-                            break 'reset;
-                        }
-                    }
-                    if let Some(v) = get_num(&mut z_vals, &my_values) {
-                        if v == target {
-                            println!("RESULT {:?}", col);
-                        }
-                    }
-                    swapped_wires(&col, &mut my_formulae);
+                } else {
+                    all = false;
                 }
             }
-        }
+            if all {
+                println!("RESULT {:?}", col);
+            }
+        // }
     });
     // for testing example input
     // println!("AND Target: {}", in1 & in2);
