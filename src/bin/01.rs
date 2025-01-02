@@ -5,8 +5,7 @@ advent_of_code::solution!(1);
 fn parse(input: &str) -> (Vec<u32>, Vec<u32>) {
     let mut res = (vec![], vec![]);
     input
-        .trim()
-        .split('\n')
+        .lines()
         .map(|v| v.split_ascii_whitespace().collect::<Vec<_>>())
         .map(|a| (a[0].parse().unwrap(), a[1].parse().unwrap()))
         .for_each(|(o, t)| {

@@ -38,7 +38,7 @@ pub fn try_num2(tgt: u64, nums: &[u64], now: u64) -> bool {
 }
 
 pub fn part_one(input: &str) -> Option<u64> {
-    let specs = input.split('\n').map(|line| {
+    let specs = input.lines().map(|line| {
         line.split_ascii_whitespace()
             .map(|v| v.replace(':', "").parse::<u64>().unwrap())
             .collect::<Vec<_>>()
@@ -55,7 +55,7 @@ pub fn part_one(input: &str) -> Option<u64> {
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    let specs = input.split('\n').map(|line| {
+    let specs = input.lines().map(|line| {
         line.split_ascii_whitespace()
             .map(|v| v.replace(':', "").parse::<u64>().unwrap())
             .collect::<Vec<_>>()

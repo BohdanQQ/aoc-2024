@@ -62,7 +62,7 @@ impl<'a> From<&'a str> for Operator<'a> {
 
 fn parse(input: &str) -> (HashMap<String, u8>, Vec<(Operator, &str)>) {
     let mut initial_value_map = HashMap::new();
-    let lines = input.split("\n").collect::<Vec<_>>();
+    let lines = input.lines().collect::<Vec<_>>();
     for l in lines.iter().take_while(|v| !v.is_empty()) {
         let split = l.split(": ").collect::<Vec<_>>();
         assert!(split.len() == 2);

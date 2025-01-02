@@ -18,8 +18,10 @@ fn parse_keys_pins(input: &str) -> (Vec<KeyVals>, Vec<PinVals>) {
         *is_key = None;
     };
 
+    // requires a newline at the end of file
     for line in input.split('\n') {
         if line.is_empty() {
+            // due to this
             if is_key.unwrap() {
                 keys.push(value);
             } else {

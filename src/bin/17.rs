@@ -53,7 +53,7 @@ impl From<(u8, u8)> for Insn {
 }
 
 fn parse_init(input: &str) -> (RegVal, RegVal, RegVal, Vec<Insn>, Vec<u8>) {
-    if let [l1, l2, l3, _, lp] = input.split('\n').collect::<Vec<_>>().as_slice() {
+    if let [l1, l2, l3, _, lp] = input.lines().collect::<Vec<_>>().as_slice() {
         let get_reg_num = |i: &str| i.split(": ").nth(1).unwrap().parse::<RegVal>().unwrap();
 
         let numbers = lp
@@ -78,7 +78,7 @@ fn parse_init(input: &str) -> (RegVal, RegVal, RegVal, Vec<Insn>, Vec<u8>) {
             numbers,
         )
     } else {
-        panic!("xd {:?}", input.split('\n').collect::<Vec<_>>().as_slice());
+        panic!("xd {:?}", input.lines().collect::<Vec<_>>().as_slice());
     }
 }
 
@@ -164,14 +164,13 @@ impl Machine {
     }
 }
 
-pub fn part_one(input: &str) -> Option<usize> {
+pub fn part_one(input: &str) -> Option<String> {
     let (reg_a, reg_b, reg_c, instrs, _) = parse_init(input);
     // println!("inputs {} {} {} {:?}", reg_a, reg_b, reg_c, instrs);
 
     let mut m = Machine::new(0, reg_a, reg_b, reg_c, instrs);
     while m.execute() {}
-    println!("{:?}", m.results);
-    None
+    Some(format!("{:?}", m.results))
 }
 
 // helper that creates the bits of an octet

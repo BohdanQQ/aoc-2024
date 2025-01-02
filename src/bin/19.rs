@@ -33,7 +33,7 @@ fn count_possible<'a>(
 
 pub fn part_one(input: &str) -> Option<u32> {
     let (parts, _) = input.split_once('\n').unwrap();
-    let towels = input.split('\n');
+    let towels = input.lines();
 
     let parts = parts.split(',').map(|v| v.trim()).collect::<Vec<_>>();
 
@@ -46,7 +46,7 @@ pub fn part_one(input: &str) -> Option<u32> {
 
 pub fn part_two(input: &str) -> Option<u64> {
     let (parts, _) = input.split_once('\n').unwrap();
-    let towels = input.split('\n');
+    let towels = input.lines();
 
     let parts = parts.split(',').map(|v| v.trim()).collect::<Vec<_>>();
     let mut cache: HashMap<&str, u64> = HashMap::new();

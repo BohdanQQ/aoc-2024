@@ -46,7 +46,7 @@ fn construct_successors(
 
 pub fn part_one(input: &str) -> Option<usize> {
     let positions = input
-        .split("\n")
+        .lines()
         .map(|ln| ln.split(",").map(|v| v.parse::<usize>().unwrap()))
         .map(|mut v| (v.next().unwrap(), v.next().unwrap()))
         .collect::<Vec<_>>();
@@ -67,7 +67,7 @@ pub fn part_one(input: &str) -> Option<usize> {
 
 pub fn part_two(input: &str) -> Option<usize> {
     let positions = input
-        .split("\n")
+        .lines()
         .map(|ln| ln.split(",").map(|v| v.parse::<usize>().unwrap()))
         .map(|mut v| (v.next().unwrap(), v.next().unwrap()))
         .collect::<Vec<_>>();

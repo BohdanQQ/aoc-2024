@@ -78,7 +78,7 @@ fn num_pair(input: &str, prefix: &str) -> (i64, i64) {
 
 pub fn part_iters(input: &str, iters: usize, print: bool) -> usize {
     let mut robots = input
-        .split('\n')
+        .lines()
         .filter(|l| !l.is_empty())
         .map(|x| {
             let mut split = x.split_ascii_whitespace();

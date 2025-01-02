@@ -131,7 +131,7 @@ fn step(
 // PART 1 SPECIFICS END --------------------------------------------------------
 
 fn parser(input: &str) -> (Vec<Vec<MapObj>>, Vec<Insn>) {
-    let line_iter = input.split("\n");
+    let line_iter = input.lines();
     let line_iter2 = line_iter.clone();
     let lines_map = line_iter.take_while(|l| !l.is_empty());
     let n = lines_map.clone().count();
