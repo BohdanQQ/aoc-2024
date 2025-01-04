@@ -5,13 +5,11 @@ advent_of_code::solution!(1);
 fn parse(input: &str) -> (Vec<u32>, Vec<u32>) {
     let mut res = (vec![], vec![]);
     // this gets another few % faster if rewritten in a for loop
-    input
-        .lines()
-        .for_each(|line| {
-            let mut it = line.split_ascii_whitespace();
-            res.0.push(it.next().unwrap().parse().unwrap());
-            res.1.push(it.next().unwrap().parse().unwrap());
-        });
+    input.lines().for_each(|line| {
+        let mut it = line.split_ascii_whitespace();
+        res.0.push(it.next().unwrap().parse().unwrap());
+        res.1.push(it.next().unwrap().parse().unwrap());
+    });
     res
 }
 

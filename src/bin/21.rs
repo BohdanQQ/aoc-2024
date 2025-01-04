@@ -4,22 +4,13 @@ use std::{
     hash::Hash,
 };
 
-advent_of_code::solution!(21, 2);
+advent_of_code::solution!(21, 1);
 
 type Position = (u64, u64);
 
 #[derive(Hash, Debug, Eq, PartialEq, Clone, Copy)]
 enum NumericKey {
     Number(u8),
-    Activate,
-}
-
-#[derive(Hash, Debug, Eq, PartialEq, Clone, Copy)]
-enum DirectionalKey {
-    ArrowL,
-    ArrowR,
-    ArrowU,
-    ArrowD,
     Activate,
 }
 
@@ -46,19 +37,7 @@ impl KeypadKey for NumericKey {
     }
 }
 
-impl KeypadKey for DirectionalKey {
-    fn get_coordinates(&self) -> Position {
-        match self {
-            DirectionalKey::ArrowL => (0, 0),
-            DirectionalKey::ArrowR => (0, 2),
-            DirectionalKey::ArrowU => (1, 1),
-            DirectionalKey::ArrowD => (0, 1),
-            DirectionalKey::Activate => (1, 2),
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone, Copy)]
 enum PushInsn {
     L,
     R,
@@ -67,15 +46,14 @@ enum PushInsn {
     A,
 }
 
-impl TryFrom<(i32, i32)> for PushInsn {
-    type Error = String;
-    fn try_from(value: (i32, i32)) -> Result<Self, Self::Error> {
-        match value {
-            (1, 0) => Ok(Self::U),
-            (-1, 0) => Ok(Self::D),
-            (0, 1) => Ok(Self::R),
-            (0, -1) => Ok(Self::L),
-            _ => Err(format!("{:?}", value)),
+impl KeypadKey for PushInsn {
+    fn get_coordinates(&self) -> Position {
+        match self {
+            PushInsn::L => (0, 0),
+            PushInsn::R => (0, 2),
+            PushInsn::U => (1, 1),
+            PushInsn::D => (0, 1),
+            PushInsn::A => (1, 2),
         }
     }
 }
@@ -85,7 +63,8 @@ impl EnumAll for PushInsn {
     where
         Self: std::marker::Sized,
     {
-        vec![Self::L, Self::R, Self::U, Self::D, Self::A]
+        // swapping A to the back makes the runtime of part 1 2-3x slower
+        vec![Self::A, Self::L, Self::R, Self::U, Self::D]
     }
 }
 
@@ -93,18 +72,6 @@ trait EnumAll {
     fn get_all() -> Vec<Self>
     where
         Self: std::marker::Sized;
-}
-
-impl EnumAll for DirectionalKey {
-    fn get_all() -> Vec<Self> {
-        vec![
-            Self::Activate,
-            Self::ArrowD,
-            Self::ArrowL,
-            Self::ArrowR,
-            Self::ArrowU,
-        ]
-    }
 }
 
 impl EnumAll for NumericKey {
@@ -135,10 +102,16 @@ fn get_all_moves<T: EnumAll + Hash + Eq + PartialEq + Sized + KeypadKey + Copy>(
             .map(|(k, (r, c))| {
                 (
                     *k,
-                    PushInsn::try_from((r as i32 - from.0 as i32, c as i32 - from.1 as i32)),
+                    match (r as i32 - from.0 as i32, c as i32 - from.1 as i32) {
+                        (1, 0) => Some(PushInsn::U),
+                        (-1, 0) => Some(PushInsn::D),
+                        (0, 1) => Some(PushInsn::R),
+                        (0, -1) => Some(PushInsn::L),
+                        _ => None,
+                    },
                 )
             })
-            .filter(|(_, x)| x.is_ok())
+            .filter(|(_, x)| x.is_some())
             .map(|(k, x)| (k, x.unwrap()))
             .collect::<Vec<_>>()
     };
@@ -199,20 +172,8 @@ fn get_all_paths<
     res
 }
 
-impl From<&PushInsn> for DirectionalKey {
-    fn from(val: &PushInsn) -> Self {
-        match val {
-            PushInsn::L => DirectionalKey::ArrowL,
-            PushInsn::R => DirectionalKey::ArrowR,
-            PushInsn::U => DirectionalKey::ArrowU,
-            PushInsn::D => DirectionalKey::ArrowD,
-            PushInsn::A => DirectionalKey::Activate,
-        }
-    }
-}
-
 type NumPair = (NumericKey, NumericKey);
-type DirPair = (DirectionalKey, DirectionalKey);
+type DirPair = (PushInsn, PushInsn);
 
 fn expand_paths(
     cand: &Vec<PushInsn>,
@@ -220,10 +181,11 @@ fn expand_paths(
     current_min: Option<usize>,
 ) -> Vec<Vec<PushInsn>> {
     let mut res: Vec<Vec<PushInsn>> = vec![vec![]];
-    let mut from_loc = DirectionalKey::Activate;
+    let mut from_loc = PushInsn::A;
     for x in cand {
+        let insn = *x;
         let mut new_res = Vec::with_capacity(256);
-        for expansion in paths_dir.get(&(from_loc, x.into())).unwrap() {
+        for expansion in paths_dir.get(&(from_loc, insn)).unwrap() {
             for r in res.iter_mut() {
                 if let Some(min) = current_min {
                     if r.len() + expansion.len() >= min {
@@ -237,7 +199,7 @@ fn expand_paths(
             }
         }
         std::mem::swap(&mut res, &mut new_res);
-        from_loc = x.into();
+        from_loc = insn;
     }
     res
 }
@@ -253,10 +215,10 @@ fn get_shortest_paths_source_target(
     let mut set = false;
     let mut min_path = vec![];
     // cand consists of all possible paths (from, target)
-    for (ci, cand) in paths_num.get(&(from, target)).unwrap().iter().enumerate() {
+    for cand in paths_num.get(&(from, target)).unwrap().iter() {
         let min = if set { Some(min_path.len()) } else { None };
         // we try to expand each move by each move on a keypad
-        for (i, cand2) in expand_paths(cand, paths_dir, min).iter().enumerate() {
+        for cand2 in expand_paths(cand, paths_dir, min).iter() {
             // for those moves we expand again
             let min = if set { Some(min_path.len()) } else { None };
             let tmp = expand_paths(cand2, paths_dir, min);
@@ -371,11 +333,11 @@ pub fn part_one(_: &str) -> Option<usize> {
     let results = TARGETS
         .par_iter()
         .map(|(val, target)| {
-            let dir_par_insns = get_all_paths::<DirectionalKey>();
+            let dir_par_insns = get_all_paths::<PushInsn>();
             let num_pad_insns = get_all_paths::<NumericKey>();
             let paths =
                 get_shortest_paths_for_steps(target.to_vec(), &num_pad_insns, &dir_par_insns);
-            println!("\nAct - Num: {:?}", paths);
+            // println!("\nAct - Num: {:?}", paths);
             let mut res = vec![];
             let mut start = NumericKey::Activate;
             for t in target {
@@ -456,7 +418,7 @@ fn get_shortest_paths_for_steps_in_depth_robot(
     robots: u64,
 ) -> u64 {
     let mut best_path = 0;
-    for path in paths_dir.get(&(from.into(), to.into())).unwrap() {
+    for path in paths_dir.get(&(*from, *to)).unwrap() {
         let mut start = PushInsn::A;
         let mut path_score = 0u64;
         if robots == 0 {
@@ -497,7 +459,7 @@ pub fn part_two(_: &str) -> Option<u64> {
     let results = TARGETS
         .iter()
         .map(|(val, target)| {
-            let dir_par_insns = get_all_paths::<DirectionalKey>();
+            let dir_par_insns = get_all_paths::<PushInsn>();
             let num_pad_insns = get_all_paths::<NumericKey>();
             (
                 val,
