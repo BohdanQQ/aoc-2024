@@ -1,15 +1,22 @@
 use std::collections::{HashMap, HashSet};
 
-use pathfinding::num_traits::pow;
-use rayon::iter::{ParallelBridge, ParallelIterator};
+advent_of_code::solution!(24, 2);
 
-advent_of_code::solution!(24);
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Operator<'a> {
     And(&'a str, &'a str),
     Or(&'a str, &'a str),
     Xor(&'a str, &'a str),
+}
+
+impl<'a> Operator<'a> {
+    fn is_over(&self, op: &'a str) -> bool {
+        match self {
+            Operator::And(a, b) => &op == a || &op == b,
+            Operator::Or(a, b) => &op == a || &op == b,
+            Operator::Xor(a, b) => &op == a || &op == b,
+        }
+    }
 }
 
 trait Calculate {
@@ -140,244 +147,202 @@ pub fn part_one<'a>(input: &'a str) -> Option<u64> {
     )
 }
 
-fn pairs<'a>(uni: &[&'a str]) -> Vec<(&'a str, &'a str)> {
-    let mut res = vec![];
-    for i in 0..uni.len() {
-        for j in i + 1..uni.len() {
-            res.push((uni[i], uni[j]));
-        }
-    }
-    res
-}
-
-fn swapped_wires<'a>(
-    pairs: &[(&'a str, &'a str)],
-    formulae: &HashMap<&'a str, Operator<'a>>,
-) -> HashMap<&'a str, Operator<'a>> {
-    let mut res = formulae.clone();
-    for (w1, w2) in pairs {
-        let w2val = formulae.get(w2).unwrap();
-        let w1val = formulae.get(w1).unwrap();
-        res.insert(w1, *w2val);
-        res.insert(w2, *w1val);
-    }
-    res
-}
-
 pub fn part_two<'a>(input: &'a str) -> Option<u32> {
     // solution mps z25 vcv z13 vwp  z19 vjv cqm
-    // the first two are mismatch on XOR gates for x y -> z
-    // the other two are mismatches in the combination gates
-    // i found this by visualizing and sorting the chart (mermaid tool)
-    //
-    // to help me find them properly I compared results for A + 1 = R
-    // A = 2**i i = 0 ..46 and compared the results with R
-    // if they didnt match, there was a problem in the neighbourhood of i-1, i, i+1
-    // which concentrates you towards the answer, here lies my battleground
-    // for this task which does not even work :) XD (for the last, correctly replaced pair, one)
-    // instance overflows i32 which gets casted badly i guess)
-    // for non +1 test cases you can also jus try R - (result) and look at the
-    // near bits from this subtraction
 
-    /*
-    maermaid chart i created (could be better, representing the gates as nodes instead):
-    flowchart
-    x03 -->|AND| fkm
-    y03 -->|AND| fkm
-    x03 -->|XOR| htb
-    y03 -->|XOR| htb
-    x04 -->|AND| btd
-    y04 -->|AND| btd
-    ...
-    x44...
-    mqs -->|XOR| z01
-    mpf -->|XOR| z01
+    /* Structure-based solution:
 
-    overall this was very mechanical and fits with the proposed solution based on pattern matching
-    (all of those however rely on the structure of the bit-adder without any redundant gates, etc.)
+        Used binary adder structure:
 
-    another solution outlined in the
-    // checks if the corresponding bit is correct, if not, we end iteration early
-    comment is to check evaluation of a single bit and only proceed if that bit is correct
+         ┌─────────────────────────────────────────────────────────┐
+         │         ┌────────────┐                                  │
+         │         │            │                                  │   zi
+         │         │            │                                  │
+         │ ┌───────►   Z XOR    ┼──────────────────────────────────┼────►
+         │ │     c │            │                                  │
+         │ │       │            │                                  │
+         │ │       └─────▲──────┘                                  │
+         │ │           xi│                                         │
+         │ │             │                                         │
+         │ │             │      ┌────────────┐     ┌────────────┐  │
+         │ │             │      │            │     │            │  │
+         │ │             │    c │            ┼─────►            │  │next carry
+Carry  ──┼─┼─────────────┼──────►   MID AND  │     │  FINAL OR  ┼──┼───►
+         │               │      │            │  ┌──►            │  │
+         │               │  ┌───►            │  │  │            │  │
+         │               │  │ xi└────────────┘  │  └────────────┘  │
+         │               │  │                   │                  │
+         │               │  │                   │                  │
+         │         ┌─────┴──┴───┐             ┌─┴─────────┐        │
+         │         │            │             │           │        │
+         │         │            │             │           │        │
+         │         │            │             │           │        │
+         │         │    XOR     │             │    AND    │        │
+         │         │            │             │           │        │
+         │         │            │             │           │        │
+         │         └─────▲───▲──┘             └───▲───▲───┘        │
+         │            xi │   │yi                yi│   │xi          │
+         │               │   │                    │   │            │
+         │               ┼───┼────────────────────┼───┘            │
+         │               │   └────────────────────┼                │
+         └─────────────────────────────────────────────────────────┘
+                         │                        │
+                        Xi                       Yi
 
-    another solution technique would construct a graph and look for cycles
-    or irregularities in the evaluation of individual bits z02 - z44.
+        This layout and names should help in analysis using the algorithm below:
 
-    also, one of the previous commits had an optimized swapping function (swapped_wires)
-    which didn't clone the formula map, it just replaced the wires since
-    the assignment says they can't overlap.
-
-    I rolled it back because something broke down elsewhere and I found it easier to go back to the cloning
-    - more pure - implementation (it made the searching much faster tho)
      */
-
-    // return None;
     let (values, formulae) = parse(input);
-    let formula_map: HashMap<&'a str, Operator<'a>> =
-        HashMap::from_iter(formulae.iter().map(|(form, res_name)| (*res_name, *form)));
-    let pairs = pairs(&formula_map.keys().cloned().collect::<Vec<_>>());
+    // generate needed AND and XOR gates:
+    let mut needed = values
+        .iter()
+        .take(values.len() / 2)
+        .enumerate()
+        .map(|(i, _)| (format!("x{:02}", i), format!("y{:02}", i)))
+        .collect::<Vec<(String, String)>>();
+    needed.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut prev_carry_gate: Option<String> = None;
+    let mut first = true;
+    let is_xor = |x: &Operator<'a>| match x {
+        Operator::And(_, _) => false,
+        Operator::Or(_, _) => false,
+        Operator::Xor(_, _) => true,
+    };
 
-    fn get_vals_starting_with<'b>(map: &HashMap<&'b str, Operator<'b>>, c: &str) -> Vec<String> {
-        map.keys()
-            .cloned()
-            .filter(|k| k.starts_with(c))
-            .map(|v| v.to_owned())
-            .collect::<Vec<_>>()
-    }
+    // note: ignore the first layer's warnings
+    // for x00, y00 ; x01, y01...
+    // check initial AND and XOR gates as well as the zXOR gate (a preliminary analysis that helps further)
+    for (x, y) in needed.clone() {
+        let and = formulae
+            .iter()
+            .filter(|(op, _)| op == &Operator::And(&x, &y) || op == &Operator::And(&y, &x))
+            .collect::<Vec<_>>();
+        if and.is_empty() {
+            println!("Formula X AND Y missing: {:?} {:?}", x, y);
+            continue;
+        } else if and.len() > 1 {
+            println!(
+                "Suspicious, only one AND formula should be present, meanwhile got more: {:?}",
+                and
+            );
+        }
+        let xor = formulae
+            .iter()
+            .filter(|(op, _)| op == &Operator::Xor(&x, &y) || op == &Operator::Xor(&y, &x))
+            .collect::<Vec<_>>();
+        if xor.is_empty() {
+            println!("Formula X XOR Y missing: {:?} {:?}", x, y);
+            continue;
+        } else if xor.len() > 1 {
+            println!(
+                "Suspicious, only one XOR formula should be present, meanwhile got more: {:?}",
+                and
+            );
+        }
 
-    fn get_vals_startin_with_v(map: &HashMap<String, u8>, c: &str) -> Vec<String> {
-        map.keys()
-            .cloned()
-            .filter(|k| k.starts_with(c))
-            .collect::<Vec<_>>()
-    }
-    fn get_num(vals: &mut [String], vals_map: &HashMap<String, u8>) -> Option<u64> {
-        vals.sort();
-        if vals.iter().all(|z| vals_map.get(z).is_some()) {
-            Some(
-                vals.iter()
-                    .map(|z| vals_map.get(z).unwrap())
-                    .rev()
-                    .fold(0u64, |prev, next| prev * 2 + *next as u64),
-            )
-        } else {
-            None
+        let and = and[0].1;
+        let xor = xor[0].1;
+        let z_xor = formulae
+            .iter()
+            .filter(|(op, _)| op.is_over(xor))
+            .collect::<Vec<_>>();
+        if z_xor.is_empty() {
+            println!("Formula ZXOR missing: xor {:?}, and {and}, x {:?}, y {:?}, should result in z\n{:?}", xor, x, y, z_xor);
+        } else if z_xor.iter().filter(|x| is_xor(&x.0)).count() != 1 {
+            println!("count of ZXOR suspicious: xor {:?}, and {and}, x {:?}, y {:?}, should result in z\n{:?}", xor, x, y, z_xor);
+        }
+        let z_xor2 = z_xor
+            .iter()
+            .filter(|x| x.1.starts_with('z') && is_xor(&x.0))
+            .collect::<Vec<_>>();
+        if z_xor2.len() != 1 {
+            println!("Suspicious, only one XOR formula should be present, ending in zXX for {:?} {:?}, xor {xor}, and {and} meanwhile got: {:?}", x, y, z_xor2);
+            println!("Previous result: {:?}", z_xor);
         }
     }
 
-    fn check_pair(pair: &(&str, &str), pairs: &[(&str, &str)]) -> bool {
-        for p in pairs {
-            if p.0 == pair.0 || p.0 == pair.1 || p.1 == pair.0 || p.1 == pair.1 {
-                return false;
+    for (x, y) in needed {
+        let and = formulae
+            .iter()
+            .filter(|(op, _)| op == &Operator::And(&x, &y) || op == &Operator::And(&y, &x))
+            .collect::<Vec<_>>();
+        let xor = formulae
+            .iter()
+            .filter(|(op, _)| op == &Operator::Xor(&x, &y) || op == &Operator::Xor(&y, &x))
+            .collect::<Vec<_>>();
+
+        let and = and[0].1;
+        let xor = xor[0].1;
+
+        if let Some(ref carry) = prev_carry_gate {
+            // find prevcarry xor "xor variable"
+            let z_xor = formulae
+                .iter()
+                .filter(|(op, _)| {
+                    op == &Operator::Xor(xor, carry) || op == &Operator::Xor(carry, xor)
+                })
+                .collect::<Vec<_>>();
+            if z_xor.is_empty() {
+                println!("Formula ZXOR missing: xor {xor} carry {carry} for x, y, should result in z {:?}, {:?}", x, y);
+            } else if z_xor.len() > 1 {
+                println!("Suspicious, only one XOR formula should be present, ending in zXX for {:?} {:?}, meanwhile got more: {:?}", x, y, z_xor);
             }
-        }
-        true
-    }
+        } else if !first {
+            panic!(
+                "Zxor not found for x, y, and, xor {x} {y} {and} {xor} prev carry: {:?}",
+                prev_carry_gate
+            );
+        };
 
-    let in1 = get_num(&mut get_vals_startin_with_v(&values, "x"), &values).unwrap();
-    let in2 = get_num(&mut get_vals_startin_with_v(&values, "y"), &values).unwrap();
-    let target = in1 + in2;
-    println!("1: {in1}");
-    println!("2: {in2}");
-    println!("Target: {target}");
-    // yea this wont work... still worth a try? xdd
-    // still not working xdd
-    //
-    // there is a clear solution - pattern matching of a bit-adder from the bottom up
-    //
-    // we match z00 = x00 XOR y00
-    // then z01 = CARRY XOR BOTTOM
-    // and look up CARRY as x00 AND y00 and BOTTOM as x01 XOR y01
-    // then compare what matched with CARRY and BOTTOM with what z01 matched
-    // no match -> found swap
-    // match -> no swap, go onto next (z02 - except the AND lookup will look
-    // for A OR B indicating the carry from previous steps (matched vars)) -> induction -> done
-    // it could also be done by hand lol
-    // it's gonna be a pain though, so yea, fuck this part :)
-    // pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
-    //     // 'reset: for j in i + 1..pairs.len() {
-    //     //     if !check_pair(&pairs[i], &[pairs[j]]) {
-    //     //         // println!("check {:?}", col);
-    //     //         continue;
-    //     //     }
-    //     let col = &[];
-    //     let my_formulae = swapped_wires(col, &formula_map);
-    //     let mut z_vals = get_vals_starting_with(&my_formulae, "z");
-    //     z_vals.sort();
-    //     let mut all = true;
-    //     let mut tries = (0..45)
-    //         .map(|i| {
-    //             (
-    //                 pow::pow(2, i) as u64,
-    //                 1 as u64,
-    //                 pow::pow(2, i) as u64 + 1 as u64,
-    //             )
-    //         })
-    //         .collect::<Vec<_>>();
-    //     tries.push((in1, in2, target));
-    //     if i % 100 == 0 {
-    //         println!("{i}");
-    //     }
-    //     for (one, two, target) in tries {
-    //         let mut my_values: HashMap<String, u8> = HashMap::new();
-    //         for i in (0..46) {
-    //             my_values.insert(
-    //                 ('x'.to_string() + &format!("{:02}", i)),
-    //                 if one & (1 << i) == 0 { 0u8 } else { 1u8 },
-    //             );
-    //             my_values.insert(
-    //                 ('y'.to_string() + &format!("{:02}", i)),
-    //                 if two & (1 << i) == 0 { 0u8 } else { 1u8 },
-    //             );
-    //         }
-    //         for (pow, z) in z_vals.iter().enumerate() {
-    //             let mut set = HashSet::new();
-    //             calculate(z, &my_formulae, &mut my_values, &mut set);
-    //             // checks if the corresponding bit is correct, if not, we end iteration early
-    //             // if !my_values.contains_key(z)
-    //             //     || *my_values.get(z).unwrap()
-    //             //         != if target & (1 << pow) == 0 { 0 } else { 1 }
-    //             // {
-    //             //     break 'reset;
-    //             // }
-    //         }
-    //         if let Some(v) = get_num(&mut z_vals, &my_values) {
-    //             if v == target {
-    //                 // println!("RESULT {:?}", col);
-    //             } else {
-    //                 all = false;
-    //                 // println!("fail: {:?} {one} {two} {target}", v)
-    //             }
-    //         } else {
-    //             all = false;
-    //         }
-    //     }
-    //     if all {
-    //         println!("RESULT {:?}", col);
-    //     }
-    //     // }
-    // });
-    // for testing example input (stopped working lol)
-    // println!("\n\nAND Target: {}", in1 & in2);
-    // let target = in1 & in2;
-    // pairs.iter().enumerate().par_bridge().for_each(|(i, _)| {
-    //     'reset: for j in i + 1..pairs.len() {
-    //         if pairs[i].0 == pairs[j].0 || pairs[i].0 == pairs[j].1 || pairs[i].1 == pairs[j].0 || pairs[i].1 == pairs[j].1 {
-    //             continue;
-    //         }
-    //         let col = [pairs[i], pairs[j]];
-    //         // println!("C: {:?}", col);
-    //         let mut my_formulae = swapped_wires(&col, &formula_map);
-    //         let mut my_values = values.clone();
-    //         let mut z_vals = get_vals_starting_with(&my_formulae, "z");
-    //         z_vals.sort();
-    //         for (pow, z) in z_vals.iter().enumerate() {
-    //             let mut set = HashSet::new();
-    //             calculate(z, &my_formulae, &mut my_values, &mut set);
-    //             // checks if the corresponding bit is correct, if not, we end iteration early
-    //             if !my_values.contains_key(z)
-    //                 || *my_values.get(z).unwrap()
-    //                     != if target & (1 << pow) == 0 { 0 } else { 1 }
-    //             {
-    //                 if my_values.contains_key(z) {
-    //                     println!("{z} {:?} not bit {pow} of {target} = {:?}", my_values.get(z).unwrap(), target & (1 << pow));
-    //                 } else {
-    //                     println!("\n\n{z} not set lol");
-    //                 }
-    //                 break 'reset;
-    //             }
-    //         }
-    //         if let Some(v) = get_num(&mut z_vals, &my_values) {
-    //             if v == target {
-    //                 println!("RESULT {:?}", col);
-    //             }
-    //             // println!("{v}");
-    //         } else {
-    //             println!("cant get num {:?}", z_vals);
-    //         }
-    //         println!("next {:?}", z_vals);
-    //     }
-    // });
+        let mid_and = if let Some(ref carry) = prev_carry_gate {
+            // find prevcarry xor "xor variable"
+            let mid_and = formulae
+                .iter()
+                .filter(|(op, _)| {
+                    op == &Operator::And(xor, carry) || op == &Operator::And(carry, xor)
+                })
+                .collect::<Vec<_>>();
+            if mid_and.is_empty() {
+                println!(
+                    "Formula midAND missing: {:?} {:?} {:?} {:?} for xor, carry, x, y",
+                    xor, carry, x, y
+                );
+            } else if mid_and.len() > 1 {
+                println!("Suspicious, only one midAND formula should be present, for x y and xor {x} {y} {and} {xor} prev carry: {:?},  meanwhile got more: {:?}", prev_carry_gate, mid_and);
+            }
+            // this line may panic, because mid_and was not found => ok since the analysis cannot continue - you must fix the mistake
+            mid_and[0].1
+        } else {
+            if !first {
+                panic!(
+                    "Mid And not found for x, y, and, xor {x} {y} {and} {xor} prev carry: {:?}",
+                    prev_carry_gate
+                );
+            }
+            xor
+        };
+
+        let final_or = formulae
+            .iter()
+            .filter(|(op, _)| {
+                op == &Operator::Or(mid_and, and) || op == &Operator::Or(and, mid_and)
+            })
+            .collect::<Vec<_>>();
+        if final_or.is_empty() {
+            println!("Formula final OR missing: and {and} midand {mid_and} x {x} y {y}");
+            // continue
+        } else if final_or.len() > 1 {
+            println!("Suspicious, only one final OR formula should be present, for x y and xor midand {x} {y} {and} {xor} {mid_and} prev carry: {:?},  meanwhile got more: {:?}", prev_carry_gate, final_or);
+            // continue
+        }
+        prev_carry_gate = Some(if first {
+            and.to_owned()
+        } else {
+            // this line may panic, because final_or was not found => ok since the analysis cannot continue - you must fix the mistake
+            final_or[0].1.to_owned()
+        });
+        first = false;
+    }
     Some(0)
 }
 
