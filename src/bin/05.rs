@@ -3,39 +3,27 @@ use std::collections::HashMap;
 advent_of_code::solution!(5);
 
 pub fn parse(input: &str) -> (Vec<(u32, u32)>, Vec<Vec<u32>>) {
-    let lines = input.split_ascii_whitespace().filter(|v| !v.is_empty());
-
     let mut r1 = vec![];
     let mut r2 = vec![];
-    for l in lines {
+    for l in input.lines().filter(|v| !v.is_empty()) {
         if l.contains("|") {
-            let parsed = l
-                .split("|")
-                .map(|v| v.parse::<u32>().unwrap())
-                .collect::<Vec<u32>>();
-            r1.push((parsed[0], parsed[1]));
-        } else if l.contains(",") {
-            let parsed = l
-                .split(",")
-                .map(|v| v.parse::<u32>().unwrap())
-                .collect::<Vec<u32>>();
-            r2.push(parsed);
+            let mut it = l.split("|").map(|v| v.parse::<u32>().unwrap());
+            r1.push((it.next().unwrap(), it.next().unwrap()));
+        } else {
+            r2.push(Vec::from_iter(
+                l.split(",").map(|v| v.parse::<u32>().unwrap()),
+            ));
         }
     }
     (r1, r2)
 }
+
 fn get_position_map(v: &[u32]) -> HashMap<u32, usize> {
-    let mut m = HashMap::new();
-    v.iter().enumerate().for_each(|(i, v)| {
-        m.insert(*v, i);
-    });
-    m
+    HashMap::from_iter(v.iter().enumerate().map(|(i, v)| (*v, i)))
 }
 
 pub fn get_position_maps(inp: &[Vec<u32>]) -> Vec<HashMap<u32, usize>> {
-    inp.iter()
-        .map(|v| get_position_map(v))
-        .collect::<Vec<HashMap<u32, usize>>>()
+    Vec::from_iter(inp.iter().map(|v| get_position_map(v)))
 }
 
 // key must be before value
@@ -72,27 +60,17 @@ pub fn satisfied(
     requirements: &HashMap<u32, Vec<u32>>,
     position_map: &HashMap<u32, usize>,
 ) -> bool {
-    let mut correct = true;
-    for elem in updates {
+    for elem in updates.iter().filter(|v| requirements.contains_key(v)) {
         let elem_idx = position_map.get(elem).unwrap();
-        if !requirements.contains_key(elem) {
-            continue;
-        }
-
         for requirement in requirements.get(elem).unwrap() {
             if let Some(req_idx) = position_map.get(requirement) {
                 if elem_idx >= req_idx {
-                    correct = false;
-                    break;
+                    return false;
                 }
             }
         }
-
-        if !correct {
-            break;
-        }
     }
-    correct
+    true
 }
 
 fn is_pure_satisfied(
@@ -112,14 +90,13 @@ pub fn part_two(input: &str) -> Option<u32> {
     let (pairs, list) = parse(input);
     let position_maps = get_position_maps(&list);
     let requirements = get_requirement_map(&pairs);
-    let mut reorders = vec![];
     // use the algo from p1 to get incorrectly-ordered stuff
-    for (updates, position_map) in list.iter().zip(position_maps.iter()) {
-        let correct = satisfied(updates, &requirements, position_map);
-        if !correct {
-            reorders.push((updates.clone(), position_map.clone()));
-        }
-    }
+    let mut reorders = Vec::from_iter(
+        list.iter()
+            .zip(position_maps.iter())
+            .filter(|(updates, position_map)| !satisfied(updates, &requirements, position_map))
+            .map(|(updates, _)| updates.clone()),
+    );
 
     let mut mid_sum = 0;
     // construct the correct order by going from the least constrained
@@ -132,27 +109,27 @@ pub fn part_two(input: &str) -> Option<u32> {
     //  - then remove that satisfiable number (53) from all requirement lists of
     //    all of the remaining numbers (75,97,47,61) and repeat until there is
     //    just one left (trivial)
-    for (updates, _) in reorders.iter_mut() {
+    for updates in reorders.iter_mut() {
         let mut updates_new: Vec<u32> = vec![];
         let mut requirements_glob = requirements.clone();
         loop {
             if updates.len() == 1 {
                 break;
             }
-            let reqs_clone = requirements_glob.clone();
-            let updates_clone = updates.clone();
             let mut progress = false;
-            for ok_val in updates_clone
+            for ok_val in updates
                 .iter()
-                .filter(|v| is_pure_satisfied(**v, &updates_clone, &reqs_clone))
+                .cloned()
+                .filter(|v| is_pure_satisfied(*v, updates, &requirements_glob))
+                .collect::<Vec<_>>()
             {
                 progress = true;
-                updates_new.insert(0, *ok_val);
+                updates_new.insert(0, ok_val);
                 for (_, v) in requirements_glob.iter_mut() {
-                    if let Some(idx) = v.iter().position(|x| x == ok_val) {
+                    if let Some(idx) = v.iter().position(|x| x == &ok_val) {
                         v.remove(idx);
 
-                        if let Some(idx2) = updates.iter().position(|x| x == ok_val) {
+                        if let Some(idx2) = updates.iter().position(|x| x == &ok_val) {
                             updates.remove(idx2);
                         }
                     }
