@@ -14,37 +14,12 @@ where
 fn find_all_horizontal(cs: Vec<Vec<char>>, needle: Chars<'_>) -> u32 {
     cs.iter()
         .map(|c| {
-            let iter = c.iter();
             let mut found = 0;
-            for i in 0..iter.clone().len() {
-                if i + needle.clone().count() > iter.clone().len() {
-                    continue;
-                }
-                let mut ok = true;
-                for j in 0..needle.clone().count() {
-                    if iter.clone().nth(i + j) != needle.clone().nth(j).as_ref() {
-                        ok = false;
-                        break;
-                    }
-                }
-                if ok {
+            for window in c.windows(needle.clone().count()) {
+                if needle.clone().zip(window.iter()).all(|(c1, c2)| c1 == *c2) {
                     found += 1;
                 }
-            }
-            // this could be cleverly done in the loop above... idc
-            let iter = c.iter().rev();
-            for i in 0..iter.clone().count() {
-                if i + needle.clone().count() > iter.clone().count() {
-                    continue;
-                }
-                let mut ok = true;
-                for j in 0..needle.clone().count() {
-                    if iter.clone().nth(i + j) != needle.clone().nth(j).as_ref() {
-                        ok = false;
-                        break;
-                    }
-                }
-                if ok {
+                if needle.clone().zip(window.iter().rev()).all(|(c1, c2)| c1 == *c2) {
                     found += 1;
                 }
             }
@@ -92,29 +67,35 @@ pub fn get_diagonals(inp: &[Vec<char>], size: usize) -> Vec<Vec<char>> {
     result
 }
 
-pub fn extract_signature(inp: &[Vec<char>], i: usize, j: usize) -> Option<String> {
+// packs 4 (supposedly 8-bit) chars into a single int
+fn char_signature(chars: [char; 4]) -> u64 {
+    chars[0] as u64
+    + ((chars[1] as u64) << 8)
+    + ((chars[2] as u64) << 16)
+    + ((chars[3] as u64) << 24)
+}
+
+fn extract_char_signature(inp: &[Vec<char>], i: usize, j: usize) -> Option<u64> {
     if i + 1 >= inp.len() || i < 1 || j < 1 || j + 1 >= inp[i].len() {
         None
     } else {
-        Some(
-            "".to_owned()
-                + &inp[i - 1][j - 1].to_string()
-                + &inp[i - 1][j + 1].to_string()
-                + &inp[i + 1][j - 1].to_string()
-                + &inp[i + 1][j + 1].to_string(),
-        )
+        Some(char_signature([inp[i - 1][j - 1], inp[i - 1][j + 1], inp[i + 1][j - 1], inp[i + 1][j + 1]]))
     }
 }
 
 pub fn get_mas_cross(inp: &[Vec<char>]) -> u32 {
     let mut res = 0;
+    let sig1 = char_signature(['M', 'M', 'S', 'S']);
+    let sig2 = char_signature(['M', 'S', 'M', 'S']);
+    let sig3 = char_signature(['S', 'S', 'M', 'M']);
+    let sig4 = char_signature(['S', 'M', 'S', 'M']);
     for i in 0..inp.len() {
         for j in 0..inp[i].len() {
             if inp[i][j] != 'A' {
                 continue;
             }
-            if let Some(sig) = extract_signature(inp, i, j) {
-                if sig == "MMSS" || sig == "MSMS" || sig == "SSMM" || sig == "SMSM" {
+            if let Some(sig) = extract_char_signature(inp, i, j) {
+                if sig == sig1 || sig == sig2 || sig == sig3 || sig == sig4 {
                     res += 1;
                 }
             }
