@@ -19,7 +19,11 @@ fn find_all_horizontal(cs: Vec<Vec<char>>, needle: Chars<'_>) -> u32 {
                 if needle.clone().zip(window.iter()).all(|(c1, c2)| c1 == *c2) {
                     found += 1;
                 }
-                if needle.clone().zip(window.iter().rev()).all(|(c1, c2)| c1 == *c2) {
+                if needle
+                    .clone()
+                    .zip(window.iter().rev())
+                    .all(|(c1, c2)| c1 == *c2)
+                {
                     found += 1;
                 }
             }
@@ -70,16 +74,21 @@ pub fn get_diagonals(inp: &[Vec<char>], size: usize) -> Vec<Vec<char>> {
 // packs 4 (supposedly 8-bit) chars into a single int
 fn char_signature(chars: [char; 4]) -> u64 {
     chars[0] as u64
-    + ((chars[1] as u64) << 8)
-    + ((chars[2] as u64) << 16)
-    + ((chars[3] as u64) << 24)
+        + ((chars[1] as u64) << 8)
+        + ((chars[2] as u64) << 16)
+        + ((chars[3] as u64) << 24)
 }
 
 fn extract_char_signature(inp: &[Vec<char>], i: usize, j: usize) -> Option<u64> {
     if i + 1 >= inp.len() || i < 1 || j < 1 || j + 1 >= inp[i].len() {
         None
     } else {
-        Some(char_signature([inp[i - 1][j - 1], inp[i - 1][j + 1], inp[i + 1][j - 1], inp[i + 1][j + 1]]))
+        Some(char_signature([
+            inp[i - 1][j - 1],
+            inp[i - 1][j + 1],
+            inp[i + 1][j - 1],
+            inp[i + 1][j + 1],
+        ]))
     }
 }
 
